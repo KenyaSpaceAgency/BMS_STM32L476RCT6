@@ -1,0 +1,5 @@
+../Core/Src/BQ76920.c:15:19:BQ76920_Init	40	static
+../Core/Src/BQ76920.c:29:19:BQ76920_ReadVoltages	64	static
+../Core/Src/BQ76920.c:49:19:BQ76920_ReadCurrent	40	static
+../Core/Src/BQ76920.c:68:19:BQ76920_BalanceCells	48	static
+../Core/Src/BQ76920.c:95:6:BQ76920_CheckProtection	32	static
