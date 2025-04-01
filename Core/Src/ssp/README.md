@@ -1,187 +1,144 @@
-\### SSP Protocol Documentation
 
-\#### Frame Structure
+# AFDEVSAT Simple Serial Protocol (SSP) Report
 
-The SSP frame consists of 9 fields with a maximum total size of 256 bytes:
+**Date**: April 01, 2025  
+**Prepared by**: Grok 3, xAI  
+**Reference Document**: AFDEVSAT.ICD.001.01, Page 64  
 
-\- \*\*Total frame size\*\*: 256 bytes maximum
+## 1. Introduction
 
-\- \*\*Maximum data size\*\*: 248 bytes (256 - 8 bytes of overhead)
+The AFDEVSAT Cube satellite employs the Simple Serial Protocol (SSP) as its internal bus communication protocol to facilitate data exchange between subsystems. This report provides a detailed documentation of the SSP frame structure, its error-checking mechanism using Cyclic Redundancy Check (CRC), and an analysis of the CRC implementation within the provided `ssp.c` source code.
 
-| Field | Size (Bytes) | Description |
+## 2. SSP Protocol Overview
 
-|----------|--------------|---------------------------------------------|
+### 2.1 Frame Structure
 
-| Flag | 1 | Start/end frame identifier (0xC0) |
+The SSP protocol defines a frame with a maximum size of 256 bytes, consisting of nine fields. The frame includes a variable-length data field, with a maximum data payload of 248 bytes after accounting for 8 bytes of overhead.
 
-| DEST | 1 | Destination subsystem address |
+| **Field**  | **Size (Bytes)** | **Description**                          |
+|------------|------------------|------------------------------------------|
+| Flag       | 1                | Start/end frame identifier (0xC0)        |
+| DEST       | 1                | Destination subsystem address            |
+| SRC        | 1                | Source subsystem address                 |
+| CMD ID     | 1                | Command identifier                       |
+| D_Len      | 1                | Data field length (excluding header)     |
+| Data       | Variable (0–248) | Actual subsystem data                    |
+| CRC_0      | 1                | CRC least significant byte (LSB)         |
+| CRC_1      | 1                | CRC most significant byte (MSB)          |
+| Flag       | 1                | End frame identifier (0xC0)              |
 
-| SRC | 1 | Source subsystem address |
+- **Maximum Frame Size**: 256 bytes
+- **Maximum Data Size**: 248 bytes (256 – 8 bytes overhead)
 
-| CMD ID | 1 | Command identifier |
+### 2.2 Cyclic Redundancy Check (CRC)
 
-| D\_Len | 1 | Data field length (excluding header) |
+The SSP protocol uses a 16-bit CRC for error detection, calculated using the CRC-16-CCITT polynomial \( X^{16} + X^{12} + X^5 + 1 \) (0x1021). The CRC is split into two bytes:
+- **CRC_0**: Least significant byte (LSB)
+- **CRC_1**: Most significant byte (MSB)
 
-| Data | Variable | Actual subsystem data (max 248 bytes) |
+The CRC is computed by both the sender and receiver over the frame’s header (excluding the start flag) and data fields to ensure data integrity during transmission.
 
-| CRC\_0 | 1 | CRC least significant byte |
+## 3. CRC Implementation in Code
 
-| CRC\_1 | 1 | CRC most significant byte |
+The provided `ssp.c` source code (created on March 29, 2025, by author "yomue") implements the SSP protocol, including CRC calculation and verification. This section details the key functions where the CRC is applied.
 
-| Flag | 1 | End frame identifier (0xC0) |
+### 3.1 CRC Calculation: `SSP_CalculateCRC`
 
-\#### CRC Specification
-
-\- \*\*Algorithm\*\*: CRC-16-CCITT
-
-\- \*\*Polynomial\*\*: \\( X^{16} + X^{12} + X^5 + 1 \\) (0x1021)
-
-\- \*\*Implementation\*\*: 16-bit CRC split into two bytes:
-
-\- \*\*CRC\_0\*\*: Least significant byte (LSB)
-
-\- \*\*CRC\_1\*\*: Most significant byte (MSB)
-
-\- \*\*Purpose\*\*: Ensures frame integrity during transmission
-
-\### CRC Application in the Code
-
-The CRC-16-CCITT calculation and verification are implemented in several key functions within the provided \`ssp.c\` code. Below, I’ll highlight where and how the CRC is applied.
-
-\#### 1. CRC Calculation Function: \`SSP\_CalculateCRC\`
-
-This function computes the CRC-16 value for a given data buffer.
-
-\`\`\`c
-
-static uint16\_t SSP\_CalculateCRC(uint8\_t \*data, uint16\_t len)
-
+**Function Definition**:
+```c
+static uint16_t SSP_CalculateCRC(uint8_t *data, uint16_t len)
 {
-
-uint16\_t crc = 0xFFFF; // Initial value
-
-for (uint16\_t i = 0; i < len; i++) {
-
-crc ^= data\[i\]; // XOR byte into CRC
-
-for (uint8\_t j = 0; j < 8; j++) {
-
-if (crc & 0x0001) {
-
-crc >>= 1; // Shift right
-
-crc ^= 0xA001; // XOR with reversed polynomial (0x1021 mirrored)
-
-} else {
-
-crc >>= 1; // Shift right
-
+    uint16_t crc = 0xFFFF;
+    for (uint16_t i = 0; i < len; i++) {
+        crc ^= data[i];
+        for (uint8_t j = 0; j < 8; j++) {
+            if (crc & 0x0001) {
+                crc >>= 1;
+                crc ^= 0xA001;
+            } else {
+                crc >>= 1;
+            }
+        }
+    }
+    return crc;
 }
+```
 
-}
+- **Purpose**: Computes the 16-bit CRC-16-CCITT value for a given data buffer.
+- **Inputs**:
+  - `data`: Pointer to the data buffer
+  - `len`: Length of the data in bytes
+- **Algorithm Details**:
+  - Initial CRC value: 0xFFFF (standard for CRC-16-CCITT)
+  - Polynomial: 0xA001 (bit-reversed form of 0x1021 for software efficiency)
+  - Process: XOR each byte into the CRC, followed by 8 bit-wise operations
+- **Output**: 16-bit CRC value
 
-}
+### 3.2 CRC Application in Frame Construction: `SSP_ConstructFrame`
 
-return crc;
-
-}
-
-\`\`\`
-
-\- \*\*Input\*\*: Pointer to data and its length
-
-\- \*\*Polynomial\*\*: 0xA001 (bit-reversed form of 0x1021 for efficient software implementation)
-
-\- \*\*Output\*\*: 16-bit CRC value
-
-\- \*\*Note\*\*: The initial value is 0xFFFF, which is standard for CRC-16-CCITT.
-
-\#### 2. CRC in Frame Construction: \`SSP\_ConstructFrame\`
-
-The CRC is calculated and appended to the frame before transmission.
-
-\`\`\`c
-
-HAL\_StatusTypeDef SSP\_ConstructFrame(SSP\_FrameTypeDef \*frame, uint8\_t \*buffer, uint16\_t \*frame\_len)
-
+**Function Definition**:
+```c
+HAL_StatusTypeDef SSP_ConstructFrame(SSP_FrameTypeDef *frame, uint8_t *buffer, uint16_t *frame_len)
 {
+    uint8_t index = 0;
 
-uint8\_t index = 0;
+    buffer[index++] = SSP_FLAG; // Start flag
+    buffer[index++] = frame->dest;
+    buffer[index++] = frame->src;
+    buffer[index++] = frame->cmd_id;
+    buffer[index++] = frame->data_len;
 
-buffer\[index++\] = SSP\_FLAG; // Start flag
+    for (uint8_t i = 0; i < frame->data_len; i++) {
+        buffer[index++] = frame->data[i];
+    }
 
-buffer\[index++\] = frame->dest;
+    frame->crc = SSP_CalculateCRC(&buffer[1], frame->data_len + 4);
+    buffer[index++] = (frame->crc >> 8) & 0xFF; // CRC_1 (MSB)
+    buffer[index++] = frame->crc & 0xFF;        // CRC_0 (LSB)
+    buffer[index++] = SSP_FLAG; // End flag
 
-buffer\[index++\] = frame->src;
-
-buffer\[index++\] = frame->cmd\_id;
-
-buffer\[index++\] = frame->data\_len;
-
-for (uint8\_t i = 0; i < frame->data\_len; i++) {
-
-buffer\[index++\] = frame->data\[i\];
-
+    *frame_len = index;
+    return HAL_OK;
 }
+```
 
-frame->crc = SSP\_CalculateCRC(&buffer\[1\], frame->data\_len + 4); // CRC over DEST, SRC, CMD\_ID, D\_Len, and Data
+- **Purpose**: Constructs an SSP frame and appends the calculated CRC.
+- **CRC Application**:
+  - **Scope**: Calculated over DEST, SRC, CMD_ID, D_Len, and Data fields (starting at `buffer[1]`, excluding the start flag).
+  - **Length**: `frame->data_len + 4` (4 bytes for header fields).
+  - **Storage**: 
+    - MSB (CRC_1) stored as `(frame->crc >> 8) & 0xFF`
+    - LSB (CRC_0) stored as `frame->crc & 0xFF`
+- **Process**: The CRC is computed after the header and data are populated, then appended before the end flag.
 
-buffer\[index++\] = (frame->crc >> 8) & 0xFF; // CRC\_1 (MSB)
+### 3.3 CRC Verification in Frame Reception: `SSP_ReceiveFrame`
 
-buffer\[index++\] = frame->crc & 0xFF; // CRC\_0 (LSB)
-
-buffer\[index++\] = SSP\_FLAG; // End flag
-
-\*frame\_len = index;
-
-return HAL\_OK;
-
-}
-
-\`\`\`
-
-\- \*\*CRC Scope\*\*: Calculated over the header (DEST, SRC, CMD\_ID, D\_Len) and Data fields, starting from \`buffer\[1\]\` (excluding the start flag).
-
-\- \*\*Length\*\*: \`frame->data\_len + 4\` (4 bytes for DEST, SRC, CMD\_ID, D\_Len).
-
-\- \*\*Storage\*\*: Split into MSB (CRC\_1) and LSB (CRC\_0) and appended before the end flag.
-
-\#### 3. CRC Verification in Frame Reception: \`SSP\_ReceiveFrame\`
-
-The receiver recalculates the CRC and compares it with the received CRC.
-
-\`\`\`c
-
-HAL\_StatusTypeDef SSP\_ReceiveFrame(USART\_HandleTypeDef \*husart, uint8\_t \*buffer, uint16\_t buffer\_len, SSP\_FrameTypeDef \*frame)
-
+**Function Definition**:
+```c
+HAL_StatusTypeDef SSP_ReceiveFrame(USART_HandleTypeDef *husart, uint8_t *buffer, uint16_t buffer_len, SSP_FrameTypeDef *frame)
 {
+    // ... (frame reception logic)
 
-// ... (frame reception logic)
+    frame->crc = (buffer[index - 3] << 8) | buffer[index - 2]; // Received CRC
+    uint16_t calc_crc = SSP_CalculateCRC(&buffer[1], frame->data_len + 4); // Recalculated CRC
+    if (frame->crc != calc_crc) return HAL_ERROR;
 
-frame->crc = (buffer\[index - 3\] << 8) | buffer\[index - 2\]; // Received CRC
-
-uint16\_t calc\_crc = SSP\_CalculateCRC(&buffer\[1\], frame->data\_len + 4); // Recalculated CRC
-
-if (frame->crc != calc\_crc) return HAL\_ERROR; // CRC mismatch check
-
-return HAL\_OK;
-
+    return HAL_OK;
 }
+```
 
-\`\`\`
+- **Purpose**: Receives an SSP frame and verifies its integrity using CRC.
+- **CRC Application**:
+  - **Extraction**: Received CRC is reconstructed from:
+    - MSB (CRC_1): `buffer[index - 3]`
+    - LSB (CRC_0): `buffer[index - 2]`
+  - **Verification**: Recalculated CRC over DEST, SRC, CMD_ID, D_Len, and Data (same scope as transmission).
+  - **Check**: Compares received CRC (`frame->crc`) with recalculated CRC (`calc_crc`).
+- **Error Handling**: Returns `HAL_ERROR` if CRCs do not match, indicating data corruption.
 
-\- \*\*CRC Extraction\*\*: Received CRC is reconstructed from \`buffer\[index - 3\]\` (MSB) and \`buffer\[index - 2\]\` (LSB).
+## 4. Summary
 
-\- \*\*Verification\*\*: Recalculated CRC over the same fields (DEST, SRC, CMD\_ID, D\_Len, Data) is compared with the received CRC.
-
-\- \*\*Error Handling\*\*: Returns \`HAL\_ERROR\` if the CRCs don’t match, indicating corruption.
-
-\### Summary of CRC Usage
-
-\- \*\*Calculation\*\*: Performed in \`SSP\_CalculateCRC\` using CRC-16-CCITT with polynomial 0xA001.
-
-\- \*\*Transmission\*\*: Applied in \`SSP\_ConstructFrame\` over header and data, stored as CRC\_1 (MSB) and CRC\_0 (LSB).
-
-\- \*\*Reception\*\*: Verified in \`SSP\_ReceiveFrame\` by recalculating and comparing with the received CRC.
-
-This implementation ensures data integrity across the satellite’s internal bus as specified in the AFDEVSAT SSP protocol.
+The SSP protocol for the AFDEVSAT Cube satellite ensures reliable communication between subsystems through a well-defined frame structure and CRC-16-CCITT error checking. The CRC is:
+- **Calculated** using `SSP_CalculateCRC` with the polynomial 0xA001.
+- **Applied** in `SSP_ConstructFrame` over the header and data fields, stored as two bytes (CRC_1, CRC_0).
+- **Verified** in `SSP_ReceiveFrame` by recalculating and comparing with the received CRC.
