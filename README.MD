@@ -20,7 +20,7 @@ This project is based on the STM32L476RCT6 microcontroller and is configured usi
    - STM32CubeIDE will open the `.ioc` file in the Device Configuration Tool (STM32CubeMX).
 
 ### Step 2: Configure the Clock
-1. **Enable HSE (High-Speed External) Clock**:
+1. **Enable HSE (High-Speed External) Clock**
    - In the `.ioc` file, go to the `Pinout & Configuration` tab.
    - Under `System Core > RCC`, set the following:
      - `HSE`: Crystal/Ceramic Resonator (PH0 and PH1).
