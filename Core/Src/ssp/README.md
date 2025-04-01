@@ -2,7 +2,6 @@
 # AFDEVSAT Simple Serial Protocol (SSP) Report
 
 **Date**: April 01, 2025  
-**Prepared by**: Grok 3, xAI  
 **Reference Document**: AFDEVSAT.ICD.001.01, Page 64  
 
 ## 1. Introduction
