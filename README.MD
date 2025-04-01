@@ -39,10 +39,12 @@ STM32 Microcontroller Reference
 -------------------------------
 
 Below is an image of the STM32L476RCT6 for reference:
-![STM32L476RCT6 pinout](STM32L476RCT6.png)
+
+
+![STM32L476RCT6 pinout](/images/STM32L476RCT6.png)
 
 ## Step-by-Step Configuration
-Screenshot 2025-04-01 111512.png
+
 ### Step 1: Create a New Project in STM32CubeIDE
 1. **Open STM32CubeIDE**:
    - Launch STM32CubeIDE on your computer.
