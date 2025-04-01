@@ -1,24 +1,3 @@
-/* USER CODE BEGIN Header */
-/**
-  ******************************************************************************
-  * @file           : main.h
-  * @brief          : Header for main.c file.
-  *                   This file contains the common defines of the application.
-  ******************************************************************************
-  * @attention
-  *
-  * Copyright (c) 2025 STMicroelectronics.
-  * All rights reserved.
-  *
-  * This software is licensed under terms that can be found in the LICENSE file
-  * in the root directory of this software component.
-  * If no LICENSE file comes with this software, it is provided AS-IS.
-  *
-  ******************************************************************************
-  */
-/* USER CODE END Header */
-
-/* Define to prevent recursive inclusion -------------------------------------*/
 #ifndef __MAIN_H
 #define __MAIN_H
 
@@ -26,26 +5,13 @@
 extern "C" {
 #endif
 
-/* Includes ------------------------------------------------------------------*/
 #include "stm32l4xx_hal.h"
 
-/* Private includes ----------------------------------------------------------*/
-/* USER CODE BEGIN Includes */
-#include "BQ76920.h"
-#include "kalman_filter.h"
-#include "pid.h"
-#include "temperature.h"
-/* USER CODE END Includes */
-
-/* Exported types ------------------------------------------------------------*/
-/* USER CODE BEGIN ET */
-/* USER CODE END ET */
-
 /* Exported constants --------------------------------------------------------*/
-/* USER CODE BEGIN EC */
-/* Battery configuration */
-#define NUM_CELLS_PER_IC        3    // 3S configuration per IC
-#define TOTAL_CELLS             6    // Total cells (3S3P, but monitoring 3S twice)
+#define NUM_GROUPS_PER_IC       3    // 3S configuration per IC (each "group" is 3 cells in parallel)
+#define TOTAL_GROUPS            3    // Total monitored groups (3S x 1 pack, second BQ76920 is redundant)
+#define TOTAL_PHYSICAL_CELLS    9    // Total physical cells (3S3P = 9 cells)
+#define CELLS_PER_GROUP         3    // Number of cells in parallel per group
 #define NOMINAL_CAPACITY        7800 // Total capacity in mAh (3P * 2600 mAh)
 #define INITIAL_SOC             50.0 // Initial State of Charge in %
 #define INITIAL_SOH             100.0 // Initial State of Health in %
@@ -62,13 +28,27 @@ extern "C" {
 #define NUM_LOG_ENTRIES         63                   // 63 slots (4032 bytes / 64)
 #define NEXT_SLOT_ADDR          FLASH_LOG_PAGE_ADDR  // Store next_slot at the start
 #define LOG_START_ADDR          (NEXT_SLOT_ADDR + 4) // Logs start after next_slot
-/* USER CODE END EC */
 
-/* Exported macro ------------------------------------------------------------*/
-/* USER CODE BEGIN EM */
-/* USER CODE END EM */
+/* Operation modes */
+typedef enum {
+    MODE_CHARGING = 0,
+    MODE_DISCHARGING,
+    MODE_SLEEP,
+    MODE_FAULT
+} BMS_ModeTypeDef;
 
-void HAL_TIM_MspPostInit(TIM_HandleTypeDef *htim);
+/* Error flags */
+#define ERROR_OVERVOLTAGE   (1 << 0)
+#define ERROR_UNDERVOLTAGE  (1 << 1)
+#define ERROR_OVERCURRENT   (1 << 2)
+#define ERROR_OVERTEMP      (1 << 3)
+#define ERROR_UNDERTEMP     (1 << 4)
+#define ERROR_DISCREPANCY   (1 << 5) // Redundancy discrepancy
+
+/* Protection thresholds */
+#define OVERTEMP_THRESHOLD  45  // °C
+#define UNDERTEMP_THRESHOLD 0   // °C
+#define SOC_LOW_THRESHOLD   10.0 // % (for charge immediately status)
 
 /* Exported functions prototypes ---------------------------------------------*/
 void Error_Handler(void);
@@ -78,34 +58,16 @@ void SystemClock_Config(void);
 /* Declare I2C handles as extern so they can be accessed in other files */
 extern I2C_HandleTypeDef hi2c1;
 extern I2C_HandleTypeDef hi2c2;
+extern I2C_HandleTypeDef hi2c3;
+/* Declare TIM handle as extern for PWM control */
 extern TIM_HandleTypeDef htim4;
+/* Declare USART handle as extern for RS485 communication */
 extern USART_HandleTypeDef husart2;
+/* Declare ADC handle for internal temperature sensor */
+extern ADC_HandleTypeDef hadc1;
+/* Declare logging function */
 extern void Log_Error(const char *message);
 /* USER CODE END EFP */
-
-
-/* Private defines -----------------------------------------------------------*/
-#define LED_Pin GPIO_PIN_3
-#define LED_GPIO_Port GPIOC
-#define RS4852_DE_Pin GPIO_PIN_1
-#define RS4852_DE_GPIO_Port GPIOA
-#define USART2_TX_Pin GPIO_PIN_2
-#define USART2_TX_GPIO_Port GPIOA
-#define BOOT2_Pin GPIO_PIN_7
-#define BOOT2_GPIO_Port GPIOC
-#define ALERT2_Pin GPIO_PIN_12
-#define ALERT2_GPIO_Port GPIOA
-#define BOOT_Pin GPIO_PIN_4
-#define BOOT_GPIO_Port GPIOB
-#define ALERT_Pin GPIO_PIN_5
-#define ALERT_GPIO_Port GPIOB
-
-/* USER CODE BEGIN Private defines */
-#define HEATER1_Pin GPIO_PIN_9
-#define HEATER1_GPIO_Port GPIOB
-#define HEATER2_Pin GPIO_PIN_8
-#define HEATER2_GPIO_Port GPIOB
-/* USER CODE END Private defines */
 
 #ifdef __cplusplus
 }
