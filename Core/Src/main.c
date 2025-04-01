@@ -257,7 +257,7 @@ int main(void)
       strcat(message, cell_data);
     }
     char temp_data[32];
-    sprintf(temp_data, sizeof(temp_data), "I1: %dmA I2: %dmA T1: %dC T2: %dC SOC: %.1f%% SOH: %.1f%%", pack_current_1, pack_current_2, temperature_1, temperature_2, soc, soh);
+    sfprintf(temp_data, sizeof(temp_data), "I1: %dmA I2: %dmA T1: %dC T2: %dC SOC: %.1f%% SOH: %.1f%%", pack_current_1, pack_current_2, temperature_1, temperature_2, soc, soh);
     strcat(message, temp_data);
     Log_Error(message);
 

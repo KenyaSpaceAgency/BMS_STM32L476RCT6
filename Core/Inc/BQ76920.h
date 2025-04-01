@@ -15,6 +15,7 @@ extern "C" {
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 
+
 /* Exported constants --------------------------------------------------------*/
 #define BQ76920_I2C_ADDRESS_1   0x08  // I2C1 address
 #define BQ76920_I2C_ADDRESS_2   0x48  // I2C2 address

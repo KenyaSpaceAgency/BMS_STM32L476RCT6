@@ -6,6 +6,7 @@
  */
 
 #include "BQ76920.h"
+#include "main.h"
 
 /**
   * @brief  Initializes the BQ76920 IC

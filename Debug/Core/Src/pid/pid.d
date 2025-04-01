@@ -1,4 +1,4 @@
-Core/Src/BQ76920.o: ../Core/Src/BQ76920.c ../Core/Inc/BQ76920.h \
+Core/Src/pid/pid.o: ../Core/Src/pid/pid.c ../Core/Inc/pid.h \
  ../Core/Inc/main.h ../Drivers/STM32L4xx_HAL_Driver/Inc/stm32l4xx_hal.h \
  ../Core/Inc/stm32l4xx_hal_conf.h \
  ../Drivers/STM32L4xx_HAL_Driver/Inc/stm32l4xx_hal_rcc.h \
@@ -35,7 +35,7 @@ Core/Src/BQ76920.o: ../Core/Src/BQ76920.c ../Core/Inc/BQ76920.h \
  ../Drivers/STM32L4xx_HAL_Driver/Inc/stm32l4xx_hal_usart_ex.h \
  ../Core/Inc/BQ76920.h ../Core/Inc/kalman_filter.h ../Core/Inc/pid.h \
  ../Core/Inc/temperature.h
-../Core/Inc/BQ76920.h:
+../Core/Inc/pid.h:
 ../Core/Inc/main.h:
 ../Drivers/STM32L4xx_HAL_Driver/Inc/stm32l4xx_hal.h:
 ../Core/Inc/stm32l4xx_hal_conf.h:
