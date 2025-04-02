@@ -24,9 +24,10 @@ C_DEPS :=
 SUBDIRS := \
 Core/Src/BQ76920 \
 Core/Src/Temperature \
-Core/Src/kalman\ filter \
 Core/Src \
+Core/Src/kalman\ filter \
 Core/Src/pid \
+Core/Src/ssp \
 Core/Startup \
 Drivers/STM32L4xx_HAL_Driver/Src \
 

@@ -11,6 +11,7 @@
 #include "pid.h"
 #include "kalman_filter.h"
 #include "ssp.h"
+#include "adc.h" // Added for MX_ADC1_Init
 #include <stdio.h>
 #include <string.h>
 
@@ -26,11 +27,11 @@ TIM_HandleTypeDef htim4;
 UART_HandleTypeDef huart1;
 USART_HandleTypeDef husart2;
 
-ADC_HandleTypeDef hadc1;
+//ADC_HandleTypeDef hadc1;
 
 /* USER CODE BEGIN PV */
-uint16_t group_voltages_1[NUM_GROUPS_PERIC]; // Group voltages from BQ76920 on I2C1 (in mV)
-uint16_t group_voltages_2[NUM_GROUPS_PERIC]; // Group voltages from BQ76920 on I2C2 (in mV, redundant)
+uint16_t group_voltages_1[NUM_GROUPS_PER_IC]; // Group voltages from BQ76920 on I2C1 (in mV)
+uint16_t group_voltages_2[NUM_GROUPS_PER_IC]; // Group voltages from BQ76920 on I2C2 (in mV, redundant)
 int16_t pack_current_1;                      // Pack current from BQ76920 on I2C1 (in mA)
 int16_t pack_current_2;                      // Pack current from BQ76920 on I2C2 (in mA, redundant)
 int16_t temperature_1;                       // Temperature from Pack 1 (in °C)
@@ -79,7 +80,6 @@ static void MX_RTC_Init(void);
 static void MX_TIM4_Init(void);
 static void MX_USART1_UART_Init(void);
 static void MX_USART2_Init(void);
-static void MX_ADC1_Init(void);
 /* USER CODE BEGIN PFP */
 void Flash_Erase(uint32_t page);
 void Log_Error(const char *message);
@@ -120,12 +120,14 @@ void Flash_Erase(uint32_t page)
   */
 void Log_Error(const char *message)
 {
+    RTC_TimeTypeDef sTime = {0};
+    RTC_DateTypeDef sDate = {0};
     HAL_RTC_GetTime(&hrtc, &sTime, RTC_FORMAT_BIN);
     HAL_RTC_GetDate(&hrtc, &sDate, RTC_FORMAT_BIN);
 
     uint64_t timestamp = HAL_GetTick(); // Simplified timestamp
     memset(log_buffer, 0, LOG_ENTRY_SIZE);
-    memcpy(log_buffer, ×tamp, TIMESTAMP_SIZE);
+    memcpy(log_buffer, &timestamp, TIMESTAMP_SIZE); // Fixed typo: ×tamp -> timestamp
     strncpy((char *)(log_buffer + TIMESTAMP_SIZE), message, MESSAGE_SIZE - 1);
 
     uint32_t address = LOG_START_ADDR + (next_slot * LOG_ENTRY_SIZE);
@@ -138,7 +140,7 @@ void Log_Error(const char *message)
 
     next_slot = (next_slot + 1) % NUM_LOG_ENTRIES;
     HAL_FLASH_Unlock();
-    HAL_FLASH_Program(FLASH_TYPEPROGRAM_WORD, NEXT_SLOT_ADDR, next_slot);
+    HAL_FLASH_Program(FLASH_TYPEPROGRAM_DOUBLEWORD, NEXT_SLOT_ADDR, next_slot);
     HAL_FLASH_Lock();
 }
 
@@ -169,7 +171,7 @@ void Log_Init(void)
         Flash_Erase(FLASH_LOG_PAGE);
         next_slot = 0;
         HAL_FLASH_Unlock();
-        HAL_FLASH_Program(FLASH_TYPEPROGRAM_WORD, NEXT_SLOT_ADDR, next_slot);
+        HAL_FLASH_Program(FLASH_TYPEPROGRAM_DOUBLEWORD, NEXT_SLOT_ADDR, next_slot);
         HAL_FLASH_Lock();
     }
 }
@@ -340,52 +342,6 @@ void SSP_ProcessReceivedFrame(SSP_FrameTypeDef *frame)
 /* USER CODE END 0 */
 
 /**
-  * @brief  Initializes the ADC for internal temperature sensor
-  * @retval None
-  */
-static void MX_ADC1_Init(void)
-{
-    ADC_ChannelConfTypeDef sConfig = {0};
-
-    hadc1.Instance = ADC1;
-    hadc1.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV4;
-    hadc1.Init.Resolution = ADC_RESOLUTION_12B;
-    hadc1.Init.DataAlign = ADC_DATAALIGN_RIGHT;
-    hadc1.Init.ScanConvMode = ADC_SCAN_DISABLE;
-    hadc1.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
-    hadc1.Init.LowPowerAutoWait = DISABLE;
-    hadc1.Init.ContinuousConvMode = DISABLE;
-    hadc1.Init.NbrOfConversion = 1;
-    hadc1.Init.DiscontinuousConvMode = DISABLE;
-    hadc1.Init.ExternalTrigConv = ADC_SOFTWARE_START;
-    hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
-    hadc1.Init.DMAContinuousRequests = DISABLE;
-    hadc1.Init.Overrun = ADC_OVR_DATA_PRESERVED;
-    hadc1.Init.OversamplingMode = DISABLE;
-    if (HAL_ADC_Init(&hadc1) != HAL_OK)
-    {
-        Error_Handler();
-    }
-
-    sConfig.Channel = ADC_CHANNEL_TEMPSENSOR;
-    sConfig.Rank = ADC_REGULAR_RANK_1;
-    sConfig.SamplingTime = ADC_SAMPLETIME_247CYCLES_5;
-    sConfig.SingleDiff = ADC_SINGLE_ENDED;
-    sConfig.OffsetNumber = ADC_OFFSET_NONE;
-    sConfig.Offset = 0;
-    if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
-    {
-        Error_Handler();
-    }
-
-    // Calibrate ADC
-    if (HAL_ADCEx_Calibration_Start(&hadc1, ADC_SINGLE_ENDED) != HAL_OK)
-    {
-        Error_Handler();
-    }
-}
-
-/**
   * @brief  The application entry point.
   * @retval int
   */
@@ -405,7 +361,7 @@ int main(void)
     MX_TIM4_Init();
     MX_USART1_UART_Init();
     MX_USART2_Init();
-    MX_ADC1_Init();
+    MX_ADC1_Init(); // Call the generated function
 
     /* USER CODE BEGIN 2 */
     // Turn off the LED at the start
@@ -593,12 +549,13 @@ int main(void)
         snprintf(message, sizeof(message), "Time: %lu | ", HAL_GetTick());
         for (uint8_t i = 0; i < NUM_GROUPS_PER_IC; i++)
         {
-            char group_data[16];
+            char group_data[20]; // Increased from 16 to 20 to accommodate worst-case (17 bytes + margin)
             snprintf(group_data, sizeof(group_data), "Group%d: %dmV ", i + 1, group_voltages_1[i]);
             strncat(message, group_data, MESSAGE_SIZE - strlen(message) - 1);
         }
-        char temp_data[32];
-        snprintf(temp_data, sizeof(temp_data), "I1: %dmA I2: %dmA T1: %dC T2: %dC PCB: %dC SOC: %.1f%% SOH: %.1f%%", pack_current_1, pack_current_2, temperature_1, temperature_2, pcb_temperature, soc, soh);
+        char temp_data[88]; // Increased from 32 to 88 to accommodate worst-case (88 bytes)
+        snprintf(temp_data, sizeof(temp_data), "I1: %dmA I2: %dmA T1: %dC T2: %dC PCB: %dC SOC: %.1f%% SOH: %.1f%%",
+                 pack_current_1, pack_current_2, temperature_1, temperature_2, pcb_temperature, soc, soh);
         strncat(message, temp_data, MESSAGE_SIZE - strlen(message) - 1);
         Log_Error(message);
 
@@ -628,7 +585,6 @@ int main(void)
     }
     /* USER CODE END 3 */
 }
-
 /* Peripheral initialization functions (omitted for brevity) */
 void SystemClock_Config(void) { /* ... */ }
 static void MX_GPIO_Init(void) { /* ... */ }

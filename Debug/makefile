@@ -11,6 +11,7 @@ RM := rm -rf
 -include sources.mk
 -include Drivers/STM32L4xx_HAL_Driver/Src/subdir.mk
 -include Core/Startup/subdir.mk
+-include Core/Src/ssp/subdir.mk
 -include Core/Src/pid/subdir.mk
 -include Core/Src/kalman\ filter/subdir.mk
 -include Core/Src/Temperature/subdir.mk

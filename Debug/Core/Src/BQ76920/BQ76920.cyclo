@@ -1,5 +1,7 @@
-../Core/Src/BQ76920/BQ76920.c:16:19:BQ76920_Init	2
-../Core/Src/BQ76920/BQ76920.c:30:19:BQ76920_ReadVoltages	4
-../Core/Src/BQ76920/BQ76920.c:50:19:BQ76920_ReadCurrent	3
-../Core/Src/BQ76920/BQ76920.c:69:19:BQ76920_BalanceCells	6
-../Core/Src/BQ76920/BQ76920.c:96:6:BQ76920_CheckProtection	4
+../Core/Src/BQ76920/BQ76920.c:17:19:BQ76920_Init	2
+../Core/Src/BQ76920/BQ76920.c:31:19:BQ76920_ReadVoltages	4
+../Core/Src/BQ76920/BQ76920.c:51:19:BQ76920_ReadCurrent	3
+../Core/Src/BQ76920/BQ76920.c:71:19:BQ76920_BalanceCells	6
+../Core/Src/BQ76920/BQ76920.c:98:6:BQ76920_CheckProtection	4
+../Core/Src/BQ76920/BQ76920.c:115:19:BQ76920_CheckOvercurrent	3
+../Core/Src/BQ76920/BQ76920.c:135:6:BQ76920_CheckRedundancy	4

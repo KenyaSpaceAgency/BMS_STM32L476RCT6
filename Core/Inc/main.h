@@ -22,10 +22,10 @@ extern "C" {
 /* Flash memory configuration for logging */
 #define FLASH_LOG_PAGE          448                  // Page 448 (address 0x080E0000)
 #define FLASH_LOG_PAGE_ADDR     0x080E0000           // Page 448 start address
-#define LOG_ENTRY_SIZE          64                   // Each log entry is 64 bytes
+#define LOG_ENTRY_SIZE          168                  // Increased from 64 to 168
 #define TIMESTAMP_SIZE          8                    // 8 bytes for Unix timestamp
-#define MESSAGE_SIZE            (LOG_ENTRY_SIZE - TIMESTAMP_SIZE) // 56 bytes for message
-#define NUM_LOG_ENTRIES         63                   // 63 slots (4032 bytes / 64)
+#define MESSAGE_SIZE            (LOG_ENTRY_SIZE - TIMESTAMP_SIZE) // Now 160 bytes for message
+#define NUM_LOG_ENTRIES         24                   // Adjusted: (4032 bytes / 168) ≈ 24 entries
 #define NEXT_SLOT_ADDR          FLASH_LOG_PAGE_ADDR  // Store next_slot at the start
 #define LOG_START_ADDR          (NEXT_SLOT_ADDR + 4) // Logs start after next_slot
 
@@ -49,6 +49,22 @@ typedef enum {
 #define OVERTEMP_THRESHOLD  45  // °C
 #define UNDERTEMP_THRESHOLD 0   // °C
 #define SOC_LOW_THRESHOLD   10.0 // % (for charge immediately status)
+
+/* GPIO Pin Definitions for USART2 */
+#define USART2_TX_Pin GPIO_PIN_2
+#define USART2_RX_Pin GPIO_PIN_3
+#define USART2_TX_GPIO_Port GPIOA
+#define USART2_RX_GPIO_Port GPIOA
+
+/* LED Pin Definitions */
+#define LED_Pin GPIO_PIN_5
+#define LED_GPIO_Port GPIOA
+
+/* TIM4 PWM Pin Definitions for Heaters */
+#define HEATER1_PWM_Pin GPIO_PIN_9 // TIM4_CH4 on PB9
+#define HEATER1_PWM_GPIO_Port GPIOB
+#define HEATER2_PWM_Pin GPIO_PIN_8 // TIM4_CH3 on PB8
+#define HEATER2_PWM_GPIO_Port GPIOB
 
 /* Exported functions prototypes ---------------------------------------------*/
 void Error_Handler(void);

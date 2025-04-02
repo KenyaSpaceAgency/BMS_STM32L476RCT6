@@ -18,7 +18,7 @@ typedef struct {
 
 /* Exported functions prototypes ---------------------------------------------*/
 void KalmanFilter_Init(KalmanFilter *kf, float initial_state, float initial_variance, float process_noise, float measurement_noise);
-void KalmanFilter_Update(KalmanFilter *kf, float measurement);
+float KalmanFilter_Update(KalmanFilter *kf, float measurement);
 
 #ifdef __cplusplus
 }

@@ -134,6 +134,77 @@ Below is an image of the STM32L476RCT6 for reference:
 2. **Review Generated Code**:
    - The generated code will include initialization functions for all configured peripherals in `main.c` and other files (e.g., `stm32l4xx_hal_msp.c`).
 
+
+### **Steps to Enable the Temperature Sensor Channel in STM32CubeMX**
+
+Here’s how to properly enable the temperature sensor channel in STM32CubeMX:
+
+1.  **Open Your .ioc File in STM32CubeMX**:
+    
+    *   Launch STM32CubeMX and open your .ioc file.
+        
+2.  **Navigate to ADC1 Configuration**:
+    
+    *   In the **Pinout & Configuration** tab, go to the **Analog** category in the left-hand panel.
+        
+    *   Select **ADC1**.
+        
+3.  **Enable the Temperature Sensor Channel**:
+    
+    *   In the ADC1 configuration pane, you’ll see a section labeled **Parameter Settings**.
+        
+    *   Look for a checkbox labeled **"Temperature Sensor Channel"** (it might also be called **"Enable Temperature Sensor"** depending on the STM32CubeMX version).
+        
+    *   **Check this box** to enable the internal temperature sensor.
+        
+4.  **Select IN16 (Temperature Sensor Channel)**:
+    
+    *   Under the **ADC1** configuration, you’ll see a list of channels (e.g., IN0, IN1, ..., IN16).
+        
+    *   Find **IN16** (which corresponds to the temperature sensor).
+        
+    *   Check the box next to **IN16** to enable it for ADC conversions.
+        
+    *   When you check IN16, STM32CubeMX might automatically enable the "Temperature Sensor Channel" if it wasn’t already checked. If not, ensure the checkbox is selected as mentioned above.
+        
+5.  **Set the Mode to Single-Ended**:
+    
+    *   For the temperature sensor channel (IN16), ensure the mode is set to **Single-ended**. The STM32L4 temperature sensor is a single-ended input, meaning it measures the voltage relative to ground (not differentially). This matches your code:cCollapseWrapCopysConfig.SingleDiff = ADC\_SINGLE\_ENDED;
+        
+    *   In STM32CubeMX, this is typically the default setting for the temperature sensor channel, but you can confirm it under the channel configuration settings.
+        
+6.  **Configure Other ADC Parameters**:
+    
+    *   As mentioned in the previous response, configure the ADC parameters to match your code:
+        
+        *   **Clock Prescaler**: PCLK/4 (matches ADC\_CLOCKPRESCALER\_PCLK\_DIV4).
+            
+        *   **Resolution**: 12-bit (matches ADC\_RESOLUTION\_12B).
+            
+        *   **Data Alignment**: Right (matches ADC\_DATAALIGN\_RIGHT).
+            
+        *   **Scan Conversion Mode**: Disabled (matches DISABLE).
+            
+        *   **End of Conversion Selection**: End of Single Conversion (matches ADC\_EOC\_SINGLE\_CONV).
+            
+        *   **Continuous Conversion Mode**: Disabled (matches DISABLE).
+            
+        *   **Number of Conversions**: 1 (matches your code).
+            
+        *   **External Trigger Conversion Source**: Software Start (matches ADC\_SOFTWARE\_START).
+            
+        *   **External Trigger Conversion Edge**: None (matches ADC\_EXTERNALTRIG\_EDGE\_NONE).
+            
+        *   **Overrun Behavior**: Data Overwritten (matches ADC\_OVR\_DATA\_OVERWRITTEN).
+            
+7.  **Generate Code**:
+    
+    *   Once you’ve configured ADC1 and enabled the temperature sensor channel, go to **Project Manager** > **Code Generator**.
+        
+    *   Ensure **Generate peripheral initialization as a pair of '.c/.h' files per peripheral** is checked.
+        
+    *   Click **Generate Code** to regenerate the project files.
+    
 ## Notes
 - Ensure all configurations match your schematic and requirements.
 - Resolve any conflicts or issues as suggested by STM32CubeIDE.

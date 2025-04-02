@@ -7,6 +7,7 @@
 
 #include "BQ76920.h"
 #include "main.h"
+#include <stdlib.h> // Added for abs function
 
 /**
   * @brief  Initializes the BQ76920 IC
