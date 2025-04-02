@@ -7,7 +7,7 @@
 #define SSP_FLAG            0xC0    // Start and end flag for SSP frames
 #define SSP_HEADER_SIZE     5       // Flag + DEST + SRC + CMD ID + D_Len
 #define SSP_FOOTER_SIZE     3       // CRC_0 + CRC_1 + Flag
-#define SSP_MAX_DATA_LEN    48      // Maximum data length (increased for more data)
+#define SSP_MAX_DATA_LEN    48      // Maximum data length
 #define SSP_MAX_FRAME_LEN   (SSP_HEADER_SIZE + SSP_MAX_DATA_LEN + SSP_FOOTER_SIZE)
 
 // Command IDs
@@ -15,11 +15,12 @@
 #define SSP_CMD_SET_MODE    0x02    // Set operation mode (e.g., charging, sleep)
 #define SSP_CMD_LOG_DATA    0x03    // Request logged data
 #define SSP_CMD_TELEMETRY   0x04    // Send detailed telemetry data
+#define SSP_CMD_GET_TIME    0x12    // Updated to match GTIME from ICD
 
 // Subsystem addresses
-#define SSP_ADDR_BMS        0x10    // BMS subsystem address
-#define SSP_ADDR_OBC        0x20    // On-Board Computer (OBC) address
-#define SSP_ADDR_POWER      0x30    // Power subsystem address
+#define SSP_ADDR_BMS        0x50    // Updated to match ICD (EPS)
+#define SSP_ADDR_OBC        0x01    // Updated to match ICD (OBC)
+#define SSP_ADDR_POWER      0x30    // Not used in ICD, but kept for compatibility
 
 /* Exported types ------------------------------------------------------------*/
 typedef struct {

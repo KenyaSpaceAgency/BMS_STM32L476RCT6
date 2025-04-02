@@ -241,3 +241,50 @@ HAL_StatusTypeDef SSP_ReceiveFrame(USART_HandleTypeDef *husart, uint8_t *buffer,
 
     return HAL_OK;
 }
+
+HAL_StatusTypeDef SSP_RequestTime(USART_HandleTypeDef *husart, SSP_TimeTypeDef *time)
+{
+    SSP_FrameTypeDef frame = {0};
+    uint16_t frame_len;
+
+    // Construct the time request frame
+    frame.dest = SSP_ADDR_OBC;
+    frame.src = SSP_ADDR_BMS;
+    frame.cmd_id = SSP_CMD_GET_TIME;
+    frame.data_len = 0;
+
+    SSP_ConstructFrame(&frame, ssp_tx_buffer, &frame_len);
+    HAL_StatusTypeDef status = SSP_TransmitFrame(husart, ssp_tx_buffer, frame_len);
+    if (status != HAL_OK) return status;
+
+    // Receive the ACK/NACK response
+    SSP_FrameTypeDef response = {0};
+    status = SSP_ReceiveFrame(husart, ssp_rx_buffer, SSP_MAX_FRAME_LEN, &response);
+    if (status != HAL_OK) return status;
+
+    if (response.dest != SSP_ADDR_BMS || (response.cmd_id != SSP_CMD_ACK && response.cmd_id != SSP_CMD_NACK)) {
+        return HAL_ERROR;
+    }
+
+    if (response.cmd_id == SSP_CMD_NACK) {
+        return HAL_ERROR; // OBC rejected the request
+    }
+
+    // Receive the time data in a separate frame
+    status = SSP_ReceiveFrame(husart, ssp_rx_buffer, SSP_MAX_FRAME_LEN, &response);
+    if (status != HAL_OK) return status;
+
+    if (response.dest != SSP_ADDR_BMS || response.cmd_id != SSP_CMD_GET_TIME || response.data_len != 7) {
+        return HAL_ERROR;
+    }
+
+    // Unpack the time data
+    time->year = (response.data[0] << 8) | response.data[1];
+    time->month = response.data[2];
+    time->day = response.data[3];
+    time->hour = response.data[4];
+    time->minute = response.data[5];
+    time->second = response.data[6];
+
+    return HAL_OK;
+}

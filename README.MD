@@ -19,19 +19,19 @@ This project is based on the STM32L476RCT6 microcontroller and is configured usi
 - **Low-Power Modes**: Implements sleep modes to optimize power consumption when idle.
 
 ## To-Do List
-- **Operation Modes Implementation**: Develop distinct modes for charging, discharging, sleep, and fault.
-- **Battery Charging Control**: Implement a CC-CV charging algorithm and hardware control for enabling/disabling the charger.
-- **MPPT Integration**: Integrate with an MPPT controller to optimize power input from solar panels.
-- **Error Flag Handling**: Fully implement handling of all status flags from the BQ76920.
-- **Protective Actions**: Add logic to take protective actions based on detected faults.
-- **Battery Pack Authentication**: Implement security features to authenticate battery packs.
-- **User Interface**: Develop a communication protocol and user interface for monitoring and control.
-- **Fault Recovery**: Implement mechanisms for fault recovery and reset.
-- **Battery Pack Configuration**: Support configurable battery parameters.
-- **Safety Compliance**: Ensure the firmware meets relevant safety standards.
-- **Testing and Validation**: Add test modes and unit tests for critical functions.
-- **Data Logging Enhancements**: Improve logging detail and retrieval mechanisms.
-- **Firmware Updates**: Support firmware updates via UART or RS485.
+ [✓] **Operation Modes Implementation**: Develop distinct modes for charging, discharging, sleep, and fault.
+ [ ] **Battery Charging Control**: Implement a CC-CV charging algorithm and hardware control for enabling/disabling the charger.
+ [ ] **MPPT Integration**: Integrate with an MPPT controller to optimize power input from solar panels.
+ [ ] **Error Flag Handling**: Fully implement handling of all status flags from the BQ76920.
+ [ ] **Protective Actions**: Add logic to take protective actions based on detected faults.
+ [ ] **Battery Pack Authentication**: Implement security features to authenticate battery packs.
+ [ ] **User Interface**: Develop a communication protocol and user interface for monitoring and control.
+ [ ] **Fault Recovery**: Implement mechanisms for fault recovery and reset.
+ [ ] **Battery Pack Configuration**: Support configurable battery parameters.
+ [ ] **Safety Compliance**: Ensure the firmware meets relevant safety standards.
+ [ ] **Testing and Validation**: Add test modes and unit tests for critical functions.
+ [ ] **Data Logging Enhancements**: Improve logging detail and retrieval mechanisms.
+ [ ] **Firmware Updates**: Support firmware updates via UART or RS485.
 
 
 
