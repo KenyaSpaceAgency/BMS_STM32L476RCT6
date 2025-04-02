@@ -1,4 +1,5 @@
 "./Core/Src/BQ76920/BQ76920.o"
+"./Core/Src/CC-CV/cccv.o"
 "./Core/Src/Temperature/temperature.o"
 "./Core/Src/adc.o"
 "./Core/Src/main.o"

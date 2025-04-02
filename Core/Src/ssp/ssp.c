@@ -7,6 +7,10 @@
 
 #include "ssp.h"
 
+/* Private variables ---------------------------------------------------------*/
+static uint8_t ssp_tx_buffer[SSP_MAX_FRAME_LEN];
+static uint8_t ssp_rx_buffer[SSP_MAX_FRAME_LEN];
+
 /* Private functions ---------------------------------------------------------*/
 /**
   * @brief  Calculates CRC-16 for the SSP frame
@@ -22,7 +26,7 @@ static uint16_t SSP_CalculateCRC(uint8_t *data, uint16_t len)
         for (uint8_t j = 0; j < 8; j++) {
             if (crc & 0x0001) {
                 crc >>= 1;
-                crc ^= 0xA001;
+                crc ^= 0xA001; // CRC-16-CCITT polynomial (bit-reversed)
             } else {
                 crc >>= 1;
             }
@@ -40,8 +44,8 @@ static uint16_t SSP_CalculateCRC(uint8_t *data, uint16_t len)
 void SSP_PackTelemetry(SSP_TelemetryTypeDef *telemetry, SSP_FrameTypeDef *frame)
 {
     frame->dest = SSP_ADDR_OBC;
-    frame->src = SSP_ADDR_BMS;
-    frame->cmd_id = SSP_CMD_TELEMETRY;
+    frame->src = SSP_ADDR_EPS;
+    frame->cmd_id = SSP_CMD_GOSTM | SSP_FRAME_TYPE_REPLY; // Reply frame
     frame->data_len = 41; // Total size of telemetry data
 
     uint8_t *data = frame->data;
@@ -169,8 +173,8 @@ HAL_StatusTypeDef SSP_ConstructFrame(SSP_FrameTypeDef *frame, uint8_t *buffer, u
     }
 
     frame->crc = SSP_CalculateCRC(&buffer[1], frame->data_len + 4);
-    buffer[index++] = (frame->crc >> 8) & 0xFF; // CRC high byte
-    buffer[index++] = frame->crc & 0xFF;        // CRC low byte
+    buffer[index++] = (frame->crc >> 8) & 0xFF; // CRC_1 (MSB)
+    buffer[index++] = frame->crc & 0xFF;        // CRC_0 (LSB)
     buffer[index++] = SSP_FLAG; // End flag
 
     *frame_len = index;
@@ -199,7 +203,6 @@ HAL_StatusTypeDef SSP_TransmitFrame(USART_HandleTypeDef *husart, uint8_t *buffer
   */
 HAL_StatusTypeDef SSP_ReceiveFrame(USART_HandleTypeDef *husart, uint8_t *buffer, uint16_t buffer_len, SSP_FrameTypeDef *frame)
 {
-    // Simplified receive (assumes frame is received in one go)
     uint16_t index = 0;
     uint8_t byte;
 
@@ -242,6 +245,12 @@ HAL_StatusTypeDef SSP_ReceiveFrame(USART_HandleTypeDef *husart, uint8_t *buffer,
     return HAL_OK;
 }
 
+/**
+  * @brief  Requests the current satellite time using GTIME command
+  * @param  husart: Pointer to the USART handle
+  * @param  time: Pointer to the time structure to fill
+  * @retval HAL_StatusTypeDef
+  */
 HAL_StatusTypeDef SSP_RequestTime(USART_HandleTypeDef *husart, SSP_TimeTypeDef *time)
 {
     SSP_FrameTypeDef frame = {0};
@@ -249,8 +258,8 @@ HAL_StatusTypeDef SSP_RequestTime(USART_HandleTypeDef *husart, SSP_TimeTypeDef *
 
     // Construct the time request frame
     frame.dest = SSP_ADDR_OBC;
-    frame.src = SSP_ADDR_BMS;
-    frame.cmd_id = SSP_CMD_GET_TIME;
+    frame.src = SSP_ADDR_EPS;
+    frame.cmd_id = SSP_CMD_GTIME;
     frame.data_len = 0;
 
     SSP_ConstructFrame(&frame, ssp_tx_buffer, &frame_len);
@@ -262,7 +271,7 @@ HAL_StatusTypeDef SSP_RequestTime(USART_HandleTypeDef *husart, SSP_TimeTypeDef *
     status = SSP_ReceiveFrame(husart, ssp_rx_buffer, SSP_MAX_FRAME_LEN, &response);
     if (status != HAL_OK) return status;
 
-    if (response.dest != SSP_ADDR_BMS || (response.cmd_id != SSP_CMD_ACK && response.cmd_id != SSP_CMD_NACK)) {
+    if (response.dest != SSP_ADDR_EPS || (response.cmd_id != SSP_CMD_ACK && response.cmd_id != SSP_CMD_NACK)) {
         return HAL_ERROR;
     }
 
@@ -274,7 +283,7 @@ HAL_StatusTypeDef SSP_RequestTime(USART_HandleTypeDef *husart, SSP_TimeTypeDef *
     status = SSP_ReceiveFrame(husart, ssp_rx_buffer, SSP_MAX_FRAME_LEN, &response);
     if (status != HAL_OK) return status;
 
-    if (response.dest != SSP_ADDR_BMS || response.cmd_id != SSP_CMD_GET_TIME || response.data_len != 7) {
+    if (response.dest != SSP_ADDR_EPS || response.cmd_id != (SSP_CMD_GTIME | SSP_FRAME_TYPE_REPLY) || response.data_len != 7) {
         return HAL_ERROR;
     }
 

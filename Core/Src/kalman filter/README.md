@@ -124,10 +124,3 @@ Future Improvements
     
 *   Add dynamic noise adaptation for real-time tuning.
     
-
-License
--------
-
-This project is open-source and can be used freely with attribution.
-
-For any further questions or enhancements, feel free to reach out!

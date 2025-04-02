@@ -129,7 +129,13 @@ This driver is suitable for:
 *   **Electric Vehicles (EVs) and Energy Storage Systems (ESS)**
     
 *   **Embedded Battery Monitoring for Drones & Robotics**
-    
+ 
+ 
+### Final Pin Description (Your Provided Pinout with Full Descriptions)
+
+Assuming your pinout is intentional (e.g., a reversed or variant-specific layout), here’s the complete description based on your list:
+
+**Pin NumberPin NameDescription**1DSGDischarge FET driver output for low-side protection (Section 3.2). Can be left floating (Section 3.1).2CHGCharge FET driver output for low-side protection (Section 3.2). Can be left floating (Section 3.1).3VSSGround pin, connected to the battery stack negative terminal (via SRN).4SDAI²C serial data input/output for host communication (Section 4).5SCLI²C serial clock input for host communication (Section 4).6TS1Temperature sense input for an external thermistor, connected via a resistor divider to REGOUT.7CAP1Likely a capacitor connection for regulator stability (not explicitly in SLUA810; possibly a variant feature or mislabeling).8REGOUTRegulator output (typically 3.3V) for powering external components.9REGSRCRegulator source input, connected to BAT via a resistor and capacitor (equivalent to REGIN).10BATBattery stack voltage sense, connected to the positive terminal of the highest cell.11(Missing)Likely **BOOT**: Wake-up pin requiring a boot switch circuit (Section 2.3, see SLUA769).12VC5Cell voltage sense input for the fifth cell’s positive terminal (Section 2.2).13VC4Cell voltage sense input for the fourth cell’s positive terminal (Section 2.2).14VC3Cell voltage sense input for the third cell’s positive terminal.15VC2Cell voltage sense input for the second cell’s positive terminal.16VC1Cell voltage sense input for the first cell’s positive terminal.17VC0Cell voltage sense input for the first cell’s negative terminal (battery ground).18SRPSense resistor positive input for coulomb counting (Section 2.1).19SRNSense resistor negative input for current measurement (Section 2.1).20ALERTOpen-drain output for fault/interrupt signaling, pulled up to REGOUT externally.   
 
 Key Features & Benefits
 -----------------------

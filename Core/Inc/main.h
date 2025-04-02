@@ -3,7 +3,7 @@
   ******************************************************************************
   * @file           : main.h
   * @brief          : Header for main.c file.
-  *                   This file contains the common defines of the application.
+  *                This file contains the common defines of the application.
   ******************************************************************************
   * @attention
   *
@@ -37,11 +37,59 @@ extern "C" {
 /* Exported types ------------------------------------------------------------*/
 /* USER CODE BEGIN ET */
 
+// BMS operation modes
+typedef enum {
+    MODE_CHARGING = 0,
+    MODE_DISCHARGING,
+    MODE_FAULT,
+    MODE_SLEEP
+} BMS_ModeTypeDef;
+
 /* USER CODE END ET */
 
 /* Exported constants --------------------------------------------------------*/
 /* USER CODE BEGIN EC */
 
+// Initial SOC and SOH values
+#define INITIAL_SOC 50.0f // 50%
+#define INITIAL_SOH 100.0f // 100%
+
+// Battery capacity
+#define NOMINAL_CAPACITY 5000.0f // 5000 mAh
+
+// Number of cell groups per IC
+#define NUM_GROUPS_PER_IC 3
+
+// Logging constants
+#define LOG_ENTRY_SIZE 64
+#define TIMESTAMP_SIZE 8
+#define MESSAGE_SIZE (LOG_ENTRY_SIZE - TIMESTAMP_SIZE)
+#define LOG_START_ADDR 0x08080000 // Example address in flash
+#define NUM_LOG_ENTRIES 100
+#define NEXT_SLOT_ADDR 0x0807F800 // Example address to store next_slot
+#define FLASH_LOG_PAGE 128 // Example flash page number
+
+// Error flags
+#define ERROR_OVERVOLTAGE  (1UL << 0)
+#define ERROR_UNDERVOLTAGE (1UL << 1)
+#define ERROR_OVERCURRENT  (1UL << 2)
+#define ERROR_OVERTEMP     (1UL << 3)
+#define ERROR_UNDERTEMP    (1UL << 4)
+#define ERROR_DISCREPANCY  (1UL << 5)
+
+// BMS thresholds and constants
+#define SOC_LOW_THRESHOLD 20.0f // 20%
+#define LOOP_TIME 1.0f // 1 second loop time
+#define MAX_CHARGE_TIME 14400 // 4 hours in seconds
+#define CV_VOLTAGE_THRESHOLD 4200 // 4200 mV (example for a Li-ion cell)
+#define CC_CURRENT_TARGET 1000 // 1000 mA (example charging current)
+#define CV_CURRENT_THRESHOLD 50 // 50 mA (example termination current)
+
+// Extern declarations for I2C handles
+extern I2C_HandleTypeDef hi2c1;
+extern I2C_HandleTypeDef hi2c2;
+extern I2C_HandleTypeDef hi2c3;
+extern ADC_HandleTypeDef hadc1;
 /* USER CODE END EC */
 
 /* Exported macro ------------------------------------------------------------*/
@@ -49,41 +97,26 @@ extern "C" {
 
 /* USER CODE END EM */
 
-void HAL_TIM_MspPostInit(TIM_HandleTypeDef *htim);
-
 /* Exported functions prototypes ---------------------------------------------*/
 void Error_Handler(void);
 
 /* USER CODE BEGIN EFP */
-void SystemClock_Config(void);
-/* Declare I2C handles as extern so they can be accessed in other files */
-extern I2C_HandleTypeDef hi2c1;
-extern I2C_HandleTypeDef hi2c2;
-extern I2C_HandleTypeDef hi2c3;
-/* Declare TIM handle as extern for PWM control */
-extern TIM_HandleTypeDef htim4;
-/* Declare USART handle as extern for RS485 communication */
-extern USART_HandleTypeDef husart2;
-/* Declare ADC handle for internal temperature sensor */
-extern ADC_HandleTypeDef hadc1;
-/* Declare logging function */
-extern void Log_Error(const char *message);
+
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
-#define LED_Pin GPIO_PIN_3
-#define LED_GPIO_Port GPIOC
+#define BOOT2_Pin GPIO_PIN_13
+#define BOOT2_GPIO_Port GPIOC
+#define ALERT2_Pin GPIO_PIN_14
+#define ALERT2_GPIO_Port GPIOC
+#define LED_Pin GPIO_PIN_0
+#define LED_GPIO_Port GPIOA
 #define RS4852_DE_Pin GPIO_PIN_1
 #define RS4852_DE_GPIO_Port GPIOA
-#define USART2_TX_Pin GPIO_PIN_2
-#define USART2_TX_GPIO_Port GPIOA
-#define BOOT2_Pin GPIO_PIN_7
-#define BOOT2_GPIO_Port GPIOC
-#define ALERT2_Pin GPIO_PIN_12
-#define ALERT2_GPIO_Port GPIOA
-#define BOOT_Pin GPIO_PIN_4
+#define USART2_TX_Pin GPIO_PIN_2 // Added definition for USART2 TX pin
+#define BOOT_Pin GPIO_PIN_2
 #define BOOT_GPIO_Port GPIOB
-#define ALERT_Pin GPIO_PIN_5
+#define ALERT_Pin GPIO_PIN_10
 #define ALERT_GPIO_Port GPIOB
 
 /* USER CODE BEGIN Private defines */

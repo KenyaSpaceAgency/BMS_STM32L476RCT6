@@ -23,6 +23,7 @@ C_DEPS :=
 # Every subdirectory with source files must be described here
 SUBDIRS := \
 Core/Src/BQ76920 \
+Core/Src/CC-CV \
 Core/Src/Temperature \
 Core/Src \
 Core/Src/kalman\ filter \

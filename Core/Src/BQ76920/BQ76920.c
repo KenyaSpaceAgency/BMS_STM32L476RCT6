@@ -149,3 +149,35 @@ void BQ76920_CheckRedundancy(uint16_t *group_voltages_1, uint16_t *group_voltage
         *discrepancy_flag = 1;
     }
 }
+
+/**
+  * @brief  Enables or disables charging and discharging on the BQ76920
+  * @param  hi2c: Pointer to the I2C handle
+  * @param  charge_enable: 1 to enable charging, 0 to disable
+  * @param  discharge_enable: 1 to enable discharging, 0 to disable
+  * @retval HAL_StatusTypeDef
+  */
+HAL_StatusTypeDef BQ76920_SetChargeEnable(I2C_HandleTypeDef *hi2c, uint8_t charge_enable, uint8_t discharge_enable)
+{
+    uint8_t sys_ctrl2 = 0;
+    uint16_t i2c_addr = (hi2c == &hi2c1) ? (BQ76920_I2C_ADDRESS_1 << 1) : (BQ76920_I2C_ADDRESS_2 << 1);
+
+    // Read the current SYS_CTRL2 register value
+    HAL_StatusTypeDef status = HAL_I2C_Mem_Read(hi2c, i2c_addr, SYS_CTRL2_REG, 1, &sys_ctrl2, 1, HAL_MAX_DELAY);
+    if (status != HAL_OK) return status;
+
+    // Modify CHG_ON (bit 0) and DSG_ON (bit 1)
+    if (charge_enable) {
+        sys_ctrl2 |= (1 << 0); // Set CHG_ON
+    } else {
+        sys_ctrl2 &= ~(1 << 0); // Clear CHG_ON
+    }
+    if (discharge_enable) {
+        sys_ctrl2 |= (1 << 1); // Set DSG_ON
+    } else {
+        sys_ctrl2 &= ~(1 << 1); // Clear DSG_ON
+    }
+
+    // Write the updated value back to SYS_CTRL2
+    return HAL_I2C_Mem_Write(hi2c, i2c_addr, SYS_CTRL2_REG, 1, &sys_ctrl2, 1, HAL_MAX_DELAY);
+}

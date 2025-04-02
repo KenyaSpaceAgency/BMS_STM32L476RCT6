@@ -5,3 +5,4 @@
 ../Core/Src/BQ76920/BQ76920.c:98:6:BQ76920_CheckProtection	4
 ../Core/Src/BQ76920/BQ76920.c:115:19:BQ76920_CheckOvercurrent	3
 ../Core/Src/BQ76920/BQ76920.c:135:6:BQ76920_CheckRedundancy	4
+../Core/Src/BQ76920/BQ76920.c:160:19:BQ76920_SetChargeEnable	5
