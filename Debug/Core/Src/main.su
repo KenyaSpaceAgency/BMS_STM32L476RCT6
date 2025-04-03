@@ -18,7 +18,6 @@
 ../Core/Src/main.c:1485:13:MX_I2C2_Init	8	static
 ../Core/Src/main.c:1517:13:MX_I2C3_Init	8	static
 ../Core/Src/main.c:1549:13:MX_RTC_Init	32	static
-../Core/Src/main.c:1598:6:HAL_TIM_MspPostInit	40	static
 ../Core/Src/main.c:1611:13:MX_TIM4_Init	48	static
 ../Core/Src/main.c:1655:13:MX_USART1_UART_Init	8	static
 ../Core/Src/main.c:1678:13:MX_USART2_Init	8	static

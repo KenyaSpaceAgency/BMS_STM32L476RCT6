@@ -1595,18 +1595,18 @@ static void MX_RTC_Init(void)
   * @retval None
   */
 
-void HAL_TIM_MspPostInit(TIM_HandleTypeDef *htim) {
-    GPIO_InitTypeDef GPIO_InitStruct = {0};
-    if (htim->Instance == TIM4) {
-        __HAL_RCC_GPIOB_CLK_ENABLE();
-        GPIO_InitStruct.Pin = GPIO_PIN_8 | GPIO_PIN_9; // Adjust pins for TIM4 CH3 and CH4
-        GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
-        GPIO_InitStruct.Pull = GPIO_NOPULL;
-        GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-        GPIO_InitStruct.Alternate = GPIO_AF2_TIM4;
-        HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-    }
-}
+//void HAL_TIM_MspPostInit(TIM_HandleTypeDef *htim) {
+//    GPIO_InitTypeDef GPIO_InitStruct = {0};
+//    if (htim->Instance == TIM4) {
+//        __HAL_RCC_GPIOB_CLK_ENABLE();
+//        GPIO_InitStruct.Pin = GPIO_PIN_8 | GPIO_PIN_9; // Adjust pins for TIM4 CH3 and CH4
+//        GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+//        GPIO_InitStruct.Pull = GPIO_NOPULL;
+//        GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+//        GPIO_InitStruct.Alternate = GPIO_AF2_TIM4;
+//        HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+//    }
+//}
 
 static void MX_TIM4_Init(void)
 {
@@ -1642,8 +1642,8 @@ static void MX_TIM4_Init(void)
         Error_Handler();
     }
     /* USER CODE BEGIN TIM4_Init 2 */
-    //HAL_TIM_PWM_MspInit(&htim4);
-    HAL_TIM_MspPostInit(&htim4);
+    HAL_TIM_PWM_MspInit(&htim4);
+
         /* USER CODE END TIM4_Init 2 */
 }
 
