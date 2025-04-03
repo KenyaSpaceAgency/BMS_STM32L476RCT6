@@ -14,6 +14,7 @@ RM := rm -rf
 -include Core/Src/ssp/subdir.mk
 -include Core/Src/pid/subdir.mk
 -include Core/Src/kalman\ filter/subdir.mk
+-include Core/Src/crc32/subdir.mk
 -include Core/Src/Temperature/subdir.mk
 -include Core/Src/CC-CV/subdir.mk
 -include Core/Src/BQ76920/subdir.mk

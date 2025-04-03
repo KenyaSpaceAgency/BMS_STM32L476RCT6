@@ -24,6 +24,7 @@
 #include "kalman_filter.h"
 #include "ssp.h"
 #include "adc.h"
+#include "crc32.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdarg.h> // For va_list in Log_Error
@@ -1037,12 +1038,14 @@ void Bootloader_FirmwareUpdate(void) {
                                                     (firmware_buffer[received_frame.data_len - 2] << 8) |
                                                     (firmware_buffer[received_frame.data_len - 1]);
                             if (calculated_crc == received_crc) {
+                                HAL_FLASH_Unlock();
+                                HAL_FLASH_Program(FLASH_TYPEPROGRAM_DOUBLEWORD, APP_VALIDITY_FLAG_ADDR, 0xA5A5A5A5);
+                                HAL_FLASH_Lock();
                                 Log_Error("Firmware update completed successfully, rebooting...");
                                 HAL_Delay(100);
                                 HAL_NVIC_SystemReset();
                             } else {
-                                Log_Error("Firmware CRC32 mismatch: calculated=0x%08lX, received=0x%08lX, rebooting...",
-                                          calculated_crc, received_crc);
+                                Log_Error("Firmware CRC32 mismatch, rebooting without setting validity flag...");
                                 HAL_Delay(100);
                                 HAL_NVIC_SystemReset();
                             }
@@ -1591,6 +1594,20 @@ static void MX_RTC_Init(void)
   * @param None
   * @retval None
   */
+
+void HAL_TIM_MspPostInit(TIM_HandleTypeDef *htim) {
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
+    if (htim->Instance == TIM4) {
+        __HAL_RCC_GPIOB_CLK_ENABLE();
+        GPIO_InitStruct.Pin = GPIO_PIN_8 | GPIO_PIN_9; // Adjust pins for TIM4 CH3 and CH4
+        GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+        GPIO_InitStruct.Pull = GPIO_NOPULL;
+        GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+        GPIO_InitStruct.Alternate = GPIO_AF2_TIM4;
+        HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+    }
+}
+
 static void MX_TIM4_Init(void)
 {
     TIM_MasterConfigTypeDef sMasterConfig = {0};
@@ -1625,7 +1642,7 @@ static void MX_TIM4_Init(void)
         Error_Handler();
     }
     /* USER CODE BEGIN TIM4_Init 2 */
-    HAL_TIM_PWM_MspInit(&htim4);
+    //HAL_TIM_PWM_MspInit(&htim4);
     HAL_TIM_MspPostInit(&htim4);
         /* USER CODE END TIM4_Init 2 */
 }
