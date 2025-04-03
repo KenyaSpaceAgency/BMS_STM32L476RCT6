@@ -5,7 +5,6 @@
  *      Author: yomue
  */
 
-
 #include "pid.h"
 #include <stdio.h>   // For snprintf
 #include <stdlib.h>  // For abs
@@ -36,8 +35,6 @@ void PID_Init(void)
   */
 void PID_Control(int16_t temp)
 {
-    extern void Log_Error(const char *message);
-
     if (temp >= TEMP_UPPER_LIMIT) {
         __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3, 0); // HEATER2
         __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_4, 0); // HEATER1

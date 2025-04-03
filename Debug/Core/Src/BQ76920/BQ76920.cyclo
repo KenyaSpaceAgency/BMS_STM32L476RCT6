@@ -6,3 +6,8 @@
 ../Core/Src/BQ76920/BQ76920.c:115:19:BQ76920_CheckOvercurrent	3
 ../Core/Src/BQ76920/BQ76920.c:135:6:BQ76920_CheckRedundancy	4
 ../Core/Src/BQ76920/BQ76920.c:160:19:BQ76920_SetChargeEnable	5
+../Core/Src/BQ76920/BQ76920.c:193:19:BQ76920_ReadRegister	2
+../Core/Src/BQ76920/BQ76920.c:210:19:BQ76920_WriteRegister	2
+../Core/Src/BQ76920/BQ76920.c:226:19:BQ76920_ReadStatus	1
+../Core/Src/BQ76920/BQ76920.c:239:19:BQ76920_ClearStatus	1
+../Core/Src/BQ76920/BQ76920.c:251:6:BQ76920_CheckStatus	19

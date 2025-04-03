@@ -28,6 +28,13 @@
 #define OV_THRESHOLD        4200  // 4.2V per cell (in mV)
 #define UV_THRESHOLD        2800  // 2.8V per cell (in mV)
 
+
+
+void BQ76920_CheckStatus(I2C_HandleTypeDef *hi2c1, I2C_HandleTypeDef *hi2c2, uint32_t *error_flags);
+HAL_StatusTypeDef BQ76920_ClearStatus(I2C_HandleTypeDef *hi2c, uint8_t flags_to_clear);
+HAL_StatusTypeDef BQ76920_ReadStatus(I2C_HandleTypeDef *hi2c, uint8_t *status);
+HAL_StatusTypeDef BQ76920_WriteRegister(I2C_HandleTypeDef *hi2c, uint8_t reg_addr, uint8_t data);
+HAL_StatusTypeDef BQ76920_ReadRegister(I2C_HandleTypeDef *hi2c, uint8_t reg_addr, uint8_t *data);
 HAL_StatusTypeDef BQ76920_Init(I2C_HandleTypeDef *hi2c);
 HAL_StatusTypeDef BQ76920_ReadVoltages(I2C_HandleTypeDef *hi2c, uint16_t *group_voltages, uint8_t offset);
 HAL_StatusTypeDef BQ76920_ReadCurrent(I2C_HandleTypeDef *hi2c, int16_t *current);

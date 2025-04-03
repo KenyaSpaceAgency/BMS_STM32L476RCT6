@@ -3,7 +3,7 @@
   ******************************************************************************
   * @file           : main.h
   * @brief          : Header for main.c file.
-  *                This file contains the common defines of the application.
+  *                   This file contains the common defines of the application.
   ******************************************************************************
   * @attention
   *
@@ -31,79 +31,96 @@ extern "C" {
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include <string.h> // For strncpy in Log_Error
+#include <stdarg.h> // For variable arguments in Log_Error
 /* USER CODE END Includes */
+
+/* Private variables ---------------------------------------------------------*/
+extern I2C_HandleTypeDef hi2c1;
+extern I2C_HandleTypeDef hi2c2;
+extern I2C_HandleTypeDef hi2c3;
+extern RTC_HandleTypeDef hrtc;
+extern TIM_HandleTypeDef htim4;
+extern UART_HandleTypeDef huart1;
+extern USART_HandleTypeDef husart2;
+extern ADC_HandleTypeDef hadc1; // Add this line
 
 /* Exported types ------------------------------------------------------------*/
 /* USER CODE BEGIN ET */
-
-// BMS operation modes
 typedef enum {
-    MODE_CHARGING = 0,
+    MODE_CHARGING,
     MODE_DISCHARGING,
     MODE_FAULT,
     MODE_SLEEP
 } BMS_ModeTypeDef;
 
+// Battery pack configuration structure
+typedef struct {
+    float nominal_capacity;        // Battery capacity in mAh
+    uint16_t ov_threshold;        // Overvoltage threshold in mV
+    uint16_t uv_threshold;        // Undervoltage threshold in mV
+    int16_t occ_threshold;        // Overcurrent charge threshold in mA
+    int16_t ocd_threshold;        // Overcurrent discharge threshold in mA
+    int16_t overtemp_threshold;   // Overtemperature threshold in °C
+    int16_t undertemp_threshold;  // Undertemperature threshold in °C
+    float soc_low_threshold;      // SOC low threshold in percentage
+    uint32_t max_charge_time;     // Maximum charge time in seconds
+    uint16_t cv_threshold;        // Constant voltage threshold in mV
+} BatteryConfig;
 /* USER CODE END ET */
 
 /* Exported constants --------------------------------------------------------*/
 /* USER CODE BEGIN EC */
+#define INITIAL_SOC 50.0f
+#define INITIAL_SOH 100.0f
 
-// Initial SOC and SOH values
-#define INITIAL_SOC 50.0f // 50%
-#define INITIAL_SOH 100.0f // 100%
+#define BACKUP_START_ADDR 0x08040000  // Example: Middle of flash
+#define BACKUP_END_ADDR   0x0807F7FF
+#define APP_VALIDITY_FLAG_ADDR 0x0807F820  // Flag to indicate valid app
 
-// Battery capacity
-#define NOMINAL_CAPACITY 5000.0f // 5000 mAh
-
-// Number of cell groups per IC
-#define NUM_GROUPS_PER_IC 3
-
-// Logging constants
+#define LOG_START_ADDR 0x08080000
+#define NEXT_SLOT_ADDR 0x0807F800
+#define FIRMWARE_UPDATE_FLAG_ADDR 0x0807F810 // Offset within the same page as NEXT_SLOT_ADDR
 #define LOG_ENTRY_SIZE 64
 #define TIMESTAMP_SIZE 8
 #define MESSAGE_SIZE (LOG_ENTRY_SIZE - TIMESTAMP_SIZE)
-#define LOG_START_ADDR 0x08080000 // Example address in flash
-#define NUM_LOG_ENTRIES 100
-#define NEXT_SLOT_ADDR 0x0807F800 // Example address to store next_slot
-#define FLASH_LOG_PAGE 128 // Example flash page number
+#define NUM_LOG_ENTRIES 1024
+#define FLASH_LOG_PAGE 128
 
-// Error flags
-#define ERROR_OVERVOLTAGE  (1UL << 0)
-#define ERROR_UNDERVOLTAGE (1UL << 1)
-#define ERROR_OVERCURRENT  (1UL << 2)
-#define ERROR_OVERTEMP     (1UL << 3)
-#define ERROR_UNDERTEMP    (1UL << 4)
-#define ERROR_DISCREPANCY  (1UL << 5)
+#define LOOP_TIME 0.1f // Loop time in seconds (100 ms)
+#define NUM_GROUPS_PER_IC 3 // Define here for consistency across files
 
-// BMS thresholds and constants
-#define SOC_LOW_THRESHOLD 20.0f // 20%
-#define LOOP_TIME 1.0f // 1 second loop time
-#define MAX_CHARGE_TIME 14400 // 4 hours in seconds
-#define CV_VOLTAGE_THRESHOLD 4200 // 4200 mV (example for a Li-ion cell)
-#define CC_CURRENT_TARGET 1000 // 1000 mA (example charging current)
-#define CV_CURRENT_THRESHOLD 50 // 50 mA (example termination current)
-
-// Extern declarations for I2C handles
-extern I2C_HandleTypeDef hi2c1;
-extern I2C_HandleTypeDef hi2c2;
-extern I2C_HandleTypeDef hi2c3;
-extern ADC_HandleTypeDef hadc1;
+// Flash memory layout
+//#define FLASH_PAGE_SIZE 2048 // 2 KB pages for STM32L476RCT6
+#define BOOTLOADER_START_ADDR 0x08000000
+#define BOOTLOADER_END_ADDR   0x08003FFF
+#define APP_START_ADDR        0x08004000
+#define APP_END_ADDR          0x0807F7FF
 /* USER CODE END EC */
 
 /* Exported macro ------------------------------------------------------------*/
 /* USER CODE BEGIN EM */
-
+#define ERROR_OVERVOLTAGE   (1UL << 0)
+#define ERROR_UNDERVOLTAGE  (1UL << 1)
+#define ERROR_OCC           (1UL << 2) // Overcurrent charge
+#define ERROR_OCD           (1UL << 3) // Overcurrent discharge
+#define ERROR_SCD           (1UL << 4) // Short-circuit discharge
+#define ERROR_OVERTEMP      (1UL << 5)
+#define ERROR_UNDERTEMP     (1UL << 6)
+#define ERROR_DISCREPANCY   (1UL << 7)
+#define ERROR_DEVICE_XREADY (1UL << 8)
+#define ERROR_OVRD_ALERT    (1UL << 9)
 /* USER CODE END EM */
 
 /* Exported functions prototypes ---------------------------------------------*/
 void Error_Handler(void);
 
 /* USER CODE BEGIN EFP */
-
+void Log_Error(const char *format, ...);
+extern BatteryConfig battery_config;
 /* USER CODE END EFP */
 
+/* Private defines -----------------------------------------------------------*/
 /* Private defines -----------------------------------------------------------*/
 #define BOOT2_Pin GPIO_PIN_13
 #define BOOT2_GPIO_Port GPIOC
