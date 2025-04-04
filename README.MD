@@ -322,6 +322,5 @@ This project implements a Battery Management System (BMS) using the **STM32L476R
 ---
 
 
-This documentation captures the project's current state, setup process, and enhancements made during our discussions. Let me know if you'd like to refine any section further or add specific details (e.g., schematic references, test procedures)!
 
 
