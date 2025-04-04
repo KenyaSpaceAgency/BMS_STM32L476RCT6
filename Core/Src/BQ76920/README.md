@@ -95,3 +95,20 @@ Here’s a breakdown of each function in simple terms, followed by the updated c
 *   **BQ76920\_CheckStatus**: Reads all the warning lights from the chip and logs them.
     
 *   **BQ76920\_SetChargeEnable**: Turns charging or discharging on/off like a switch.
+
+Key Features & Benefits
+-----------------------
+
+*   ✔️ **Easy Talking**: Uses I2C to chat with the chip quickly.
+    
+*   ✔️ **Accurate Checks**: Measures volts and amps precisely.
+    
+*   ✔️ **Balancing Act**: Keeps all batteries evened out.
+    
+*   ✔️ **Safety First**: Watches for trouble like overfull or empty batteries.
+    
+*   ✔️ **Small & Simple**: Works well in tiny gadgets.
+
+
+
+#include "BQ76920.h"#include "main.h"int main() { I2C\_HandleTypeDef hi2c1; _// Our phone line to the chip_ BQ76920\_Init(&hi2c1); _// Say “Hello” to the chip_ uint16\_t cell\_voltages\[3\]; _// A list for 3 battery parts_ int16\_t current; _// A number for the energy flow_ uint8\_t ov\_flag, uv\_flag; _// Warning flags_ _// Get the voltages_ if (BQ76920\_ReadVoltages(&hi2c1, cell\_voltages, 0) == HAL\_OK) { printf("First part has %d mV\\n", cell\_voltages\[0\]); _// Show the power_ } _// Get the current_ if (BQ76920\_ReadCurrent(&hi2c1, ¤t) == HAL\_OK) { printf("Energy flow is %d mA\\n", current); } _// Check for trouble_ BQ76920\_CheckProtection(&hi2c1, cell\_voltages, 0, &ov\_flag, &uv\_flag); if (ov\_flag) printf("Too much power!\\n"); if (uv\_flag) printf("Not enough power!\\n"); return 0;}

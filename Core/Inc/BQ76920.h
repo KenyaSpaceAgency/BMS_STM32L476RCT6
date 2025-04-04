@@ -21,19 +21,21 @@
 #define OV_THRESHOLD        4200  // Too full! (4.2 volts)
 #define UV_THRESHOLD        2800  // Too empty! (2.8 volts)
 
-// These are the instructions (functions) we can give the chip
-HAL_StatusTypeDef BQ76920_Init(I2C_HandleTypeDef *hi2c);  // Wake up the chip
-HAL_StatusTypeDef BQ76920_ReadVoltages(I2C_HandleTypeDef *hi2c, uint16_t *group_voltages, uint8_t offset);  // Check battery fullness
-HAL_StatusTypeDef BQ76920_ReadCurrent(I2C_HandleTypeDef *hi2c, int16_t *current);  // Check power flow
-HAL_StatusTypeDef BQ76920_BalanceCells(I2C_HandleTypeDef *hi2c, uint16_t *group_voltages, uint8_t offset, uint8_t *balancing_mask);  // Balance the batteries
-void BQ76920_CheckProtection(I2C_HandleTypeDef *hi2c, uint16_t *group_voltages, uint8_t offset, uint8_t *ov_flag, uint8_t *uv_flag);  // Look for trouble
-HAL_StatusTypeDef BQ76920_CheckOvercurrent(I2C_HandleTypeDef *hi2c, uint8_t *occ_flag, uint8_t *ocd_flag);  // Check for too much power
-void BQ76920_CheckRedundancy(uint16_t *group_voltages_1, uint16_t *group_voltages_2, int16_t current_1, int16_t current_2, uint8_t *discrepancy_flag);  // Compare two chips
-HAL_StatusTypeDef BQ76920_SetChargeEnable(I2C_HandleTypeDef *hi2c, uint8_t charge_enable, uint8_t discharge_enable);  // Turn charging on/off
-HAL_StatusTypeDef BQ76920_ReadRegister(I2C_HandleTypeDef *hi2c, uint8_t reg_addr, uint8_t *data);  // Read a specific notebook
-HAL_StatusTypeDef BQ76920_WriteRegister(I2C_HandleTypeDef *hi2c, uint8_t reg_addr, uint8_t data);  // Write to a specific notebook
-HAL_StatusTypeDef BQ76920_ReadStatus(I2C_HandleTypeDef *hi2c, uint8_t *status);  // Check all warning lights
-HAL_StatusTypeDef BQ76920_ClearStatus(I2C_HandleTypeDef *hi2c, uint8_t flags_to_clear);  // Turn off warning lights
-void BQ76920_CheckStatus(I2C_HandleTypeDef *hi2c1, I2C_HandleTypeDef *hi2c2, uint32_t *error_flags);  // Check both chips’ warnings
+// Turn on the chip and get it ready
+HAL_StatusTypeDef BQ76920_Init(I2C_HandleTypeDef *hi2c);
 
+// Read how much power each battery part has
+HAL_StatusTypeDef BQ76920_ReadVoltages(I2C_HandleTypeDef *hi2c, uint16_t *group_voltages, uint8_t offset);
+
+// Check how much energy is flowing
+HAL_StatusTypeDef BQ76920_ReadCurrent(I2C_HandleTypeDef *hi2c, int16_t *current);
+
+// Even out the battery parts
+HAL_StatusTypeDef BQ76920_BalanceCells(I2C_HandleTypeDef *hi2c, uint16_t *group_voltages, uint8_t offset, uint8_t *balancing_mask);
+
+// Look for power problems
+void BQ76920_CheckProtection(I2C_HandleTypeDef *hi2c, uint16_t *group_voltages, uint8_t offset, uint8_t *ov_flag, uint8_t *uv_flag);
+
+// Turn charging or discharging on/off
+HAL_StatusTypeDef BQ76920_SetChargeEnable(I2C_HandleTypeDef *hi2c, uint8_t charge_enable, uint8_t discharge_enable);
 #endif /* BQ76920_H_ */
