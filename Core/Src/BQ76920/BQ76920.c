@@ -7,17 +7,22 @@
 
 #include "BQ76920.h"
 #include "main.h"
-#include <stdlib.h> // Added for abs function
+#include <stdlib.h> // For abs (to compare numbers)
 
+
+// Imagine the BQ76920 as a little helper with notebooks we can read or write using I2C wires
+
+// This wakes up the BQ76920 chip to make sure it’s ready
 /**
   * @brief  Initializes the BQ76920 IC
   * @param  hi2c: Pointer to the I2C handle
   * @retval HAL_StatusTypeDef
   */
-HAL_StatusTypeDef BQ76920_Init(I2C_HandleTypeDef *hi2c)
-{
-    uint8_t sys_stat = 0;
+HAL_StatusTypeDef BQ76920_Init(I2C_HandleTypeDef *hi2c) {
+    uint8_t sys_stat = 0;  // A little box to hold the warning lights
+    // Pick the right phone number for this chip (shifted because I2C needs it this way)
     uint16_t i2c_addr = (hi2c == &hi2c1) ? (BQ76920_I2C_ADDRESS_1 << 1) : (BQ76920_I2C_ADDRESS_2 << 1);
+    // Ask the chip: "Are you there?" by reading its status notebook
     return HAL_I2C_Mem_Read(hi2c, i2c_addr, SYS_STAT_REG, 1, &sys_stat, 1, HAL_MAX_DELAY);
 }
 
@@ -28,19 +33,24 @@ HAL_StatusTypeDef BQ76920_Init(I2C_HandleTypeDef *hi2c)
   * @param  offset: Offset in the array to store the voltages
   * @retval HAL_StatusTypeDef
   */
-HAL_StatusTypeDef BQ76920_ReadVoltages(I2C_HandleTypeDef *hi2c, uint16_t *group_voltages, uint8_t offset)
-{
-    uint8_t data[6];
+// This checks how full each battery is
+HAL_StatusTypeDef BQ76920_ReadVoltages(I2C_HandleTypeDef *hi2c, uint16_t *group_voltages, uint8_t offset) {
+    uint8_t data[6];  // A box to hold 6 bytes (2 bytes per battery group)
     uint16_t i2c_addr = (hi2c == &hi2c1) ? (BQ76920_I2C_ADDRESS_1 << 1) : (BQ76920_I2C_ADDRESS_2 << 1);
+    // Ask the chip for the voltage notebook
     HAL_StatusTypeDef status = HAL_I2C_Mem_Read(hi2c, i2c_addr, VC1_HI_REG, 1, data, 6, HAL_MAX_DELAY);
-    if (status != HAL_OK) return status;
+    if (status != HAL_OK) return status;  // Oops, something went wrong!
 
+    // Turn the raw numbers into millivolts (like turning a code into a real number)
     for (uint8_t i = 0; i < NUM_GROUPS_PER_IC; i++) {
-        uint16_t raw = (data[i * 2] << 8) | data[i * 2 + 1];
-        group_voltages[offset + i] = raw * 0.382; // Convert to mV (approximate scaling)
+        uint16_t raw = (data[i * 2] << 8) | data[i * 2 + 1];  // Combine 2 bytes into 1 number
+        group_voltages[offset + i] = raw * 0.382;  // Multiply by a magic number to get millivolts
     }
-    return HAL_OK;
+    return HAL_OK;  // All done!
 }
+
+
+
 
 /**
   * @brief  Reads pack current from the BQ76920
@@ -48,17 +58,23 @@ HAL_StatusTypeDef BQ76920_ReadVoltages(I2C_HandleTypeDef *hi2c, uint16_t *group_
   * @param  current: Pointer to store the current (in mA)
   * @retval HAL_StatusTypeDef
   */
-HAL_StatusTypeDef BQ76920_ReadCurrent(I2C_HandleTypeDef *hi2c, int16_t *current)
-{
-    uint8_t data[2];
+// This checks how much power is flowing
+HAL_StatusTypeDef BQ76920_ReadCurrent(I2C_HandleTypeDef *hi2c, int16_t *current) {
+    uint8_t data[2];  // A box for 2 bytes
     uint16_t i2c_addr = (hi2c == &hi2c1) ? (BQ76920_I2C_ADDRESS_1 << 1) : (BQ76920_I2C_ADDRESS_2 << 1);
+    // Ask the chip for the power flow notebook
     HAL_StatusTypeDef status = HAL_I2C_Mem_Read(hi2c, i2c_addr, CC_HI_REG, 1, data, 2, HAL_MAX_DELAY);
     if (status != HAL_OK) return status;
 
-    *current = (int16_t)((data[0] << 8) | data[1]);
-    *current *= 8.44; // Convert to mA (approximate scaling)
+    // Turn the raw number into milliamps
+    *current = (int16_t)((data[0] << 8) | data[1]);  // Combine 2 bytes
+    *current *= 8.44;  // Multiply by a magic number to get milliamps
     return HAL_OK;
 }
+
+
+
+
 
 /**
   * @brief  Balances groups by enabling balancing on the BQ76920
@@ -68,23 +84,29 @@ HAL_StatusTypeDef BQ76920_ReadCurrent(I2C_HandleTypeDef *hi2c, int16_t *current)
   * @param  balancing_mask: Pointer to store the balancing bitmask
   * @retval HAL_StatusTypeDef
   */
-HAL_StatusTypeDef BQ76920_BalanceCells(I2C_HandleTypeDef *hi2c, uint16_t *group_voltages, uint8_t offset, uint8_t *balancing_mask)
-{
-    *balancing_mask = 0;
-    uint16_t min_voltage = group_voltages[offset];
+// This balances the batteries so they’re all about the same
+HAL_StatusTypeDef BQ76920_BalanceCells(I2C_HandleTypeDef *hi2c, uint16_t *group_voltages, uint8_t offset, uint8_t *balancing_mask) {
+    *balancing_mask = 0;  // Start with no balancing
+    uint16_t min_voltage = group_voltages[offset];  // Find the emptiest battery
     for (uint8_t i = 0; i < NUM_GROUPS_PER_IC; i++) {
         if (group_voltages[offset + i] < min_voltage) min_voltage = group_voltages[offset + i];
     }
 
+    // If a battery is much fuller (50 mV more), mark it for balancing
     for (uint8_t i = 0; i < NUM_GROUPS_PER_IC; i++) {
-        if (group_voltages[offset + i] > min_voltage + 50) { // 50 mV threshold
-            *balancing_mask |= (1 << i);
+        if (group_voltages[offset + i] > min_voltage + 50) {
+            *balancing_mask |= (1 << i);  // Turn on a switch for this battery
         }
     }
 
+    // Tell the chip which batteries to balance
     uint16_t i2c_addr = (hi2c == &hi2c1) ? (BQ76920_I2C_ADDRESS_1 << 1) : (BQ76920_I2C_ADDRESS_2 << 1);
     return HAL_I2C_Mem_Write(hi2c, i2c_addr, CELLBAL1_REG, 1, balancing_mask, 1, HAL_MAX_DELAY);
 }
+
+
+
+
 
 /**
   * @brief  Checks for overvoltage and undervoltage conditions on the groups
@@ -95,13 +117,13 @@ HAL_StatusTypeDef BQ76920_BalanceCells(I2C_HandleTypeDef *hi2c, uint16_t *group_
   * @param  uv_flag: Pointer to store undervoltage flag
   * @retval None
   */
-void BQ76920_CheckProtection(I2C_HandleTypeDef *hi2c, uint16_t *group_voltages, uint8_t offset, uint8_t *ov_flag, uint8_t *uv_flag)
-{
-    *ov_flag = 0;
-    *uv_flag = 0;
+// This checks if batteries are too full or too empty
+void BQ76920_CheckProtection(I2C_HandleTypeDef *hi2c, uint16_t *group_voltages, uint8_t offset, uint8_t *ov_flag, uint8_t *uv_flag) {
+    *ov_flag = 0;  // No overvoltage yet
+    *uv_flag = 0;  // No undervoltage yet
     for (uint8_t i = 0; i < NUM_GROUPS_PER_IC; i++) {
-        if (group_voltages[offset + i] > battery_config.ov_threshold) *ov_flag = 1;
-        if (group_voltages[offset + i] < battery_config.uv_threshold) *uv_flag = 1;
+        if (group_voltages[offset + i] > battery_config.ov_threshold) *ov_flag = 1;  // Too full!
+        if (group_voltages[offset + i] < battery_config.uv_threshold) *uv_flag = 1;  // Too empty!
     }
 }
 
@@ -112,14 +134,14 @@ void BQ76920_CheckProtection(I2C_HandleTypeDef *hi2c, uint16_t *group_voltages, 
   * @param  ocd_flag: Pointer to store overcurrent in discharge flag (1 = triggered)
   * @retval HAL_StatusTypeDef
   */
-HAL_StatusTypeDef BQ76920_CheckOvercurrent(I2C_HandleTypeDef *hi2c, uint8_t *occ_flag, uint8_t *ocd_flag)
-{
+// This checks if too much power is flowing
+HAL_StatusTypeDef BQ76920_CheckOvercurrent(I2C_HandleTypeDef *hi2c, uint8_t *occ_flag, uint8_t *ocd_flag) {
     uint8_t sys_stat = 0;
     uint16_t i2c_addr = (hi2c == &hi2c1) ? (BQ76920_I2C_ADDRESS_1 << 1) : (BQ76920_I2C_ADDRESS_2 << 1);
     HAL_StatusTypeDef status = HAL_I2C_Mem_Read(hi2c, i2c_addr, SYS_STAT_REG, 1, &sys_stat, 1, HAL_MAX_DELAY);
     if (status != HAL_OK) return status;
-    *occ_flag = (sys_stat & (1 << 2)) ? 1 : 0; // OCC bit
-    *ocd_flag = (sys_stat & (1 << 1)) ? 1 : 0; // OCD bit
+    *occ_flag = (sys_stat & (1 << 2)) ? 1 : 0;  // Too much power going in
+    *ocd_flag = (sys_stat & (1 << 1)) ? 1 : 0;  // Too much power going out
     return HAL_OK;
 }
 

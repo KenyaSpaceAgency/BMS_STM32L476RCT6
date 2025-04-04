@@ -27,25 +27,25 @@ Idx Name          Size      VMA       LMA       File off  Algn
                   ALLOC
  11 .ARM.attributes 00000030  00000000  00000000  0001321c  2**0
                   CONTENTS, READONLY
- 12 .debug_info   00020451  00000000  00000000  0001324c  2**0
+ 12 .debug_info   0002045e  00000000  00000000  0001324c  2**0
                   CONTENTS, READONLY, DEBUGGING, OCTETS
- 13 .debug_abbrev 000042de  00000000  00000000  0003369d  2**0
+ 13 .debug_abbrev 0000431f  00000000  00000000  000336aa  2**0
                   CONTENTS, READONLY, DEBUGGING, OCTETS
- 14 .debug_aranges 00001d50  00000000  00000000  00037980  2**3
+ 14 .debug_aranges 00001d50  00000000  00000000  000379d0  2**3
                   CONTENTS, READONLY, DEBUGGING, OCTETS
- 15 .debug_rnglists 00001718  00000000  00000000  000396d0  2**0
+ 15 .debug_rnglists 00001718  00000000  00000000  00039720  2**0
                   CONTENTS, READONLY, DEBUGGING, OCTETS
- 16 .debug_macro  0002d4d5  00000000  00000000  0003ade8  2**0
+ 16 .debug_macro  0002d4d5  00000000  00000000  0003ae38  2**0
                   CONTENTS, READONLY, DEBUGGING, OCTETS
- 17 .debug_line   00025972  00000000  00000000  000682bd  2**0
+ 17 .debug_line   00025974  00000000  00000000  0006830d  2**0
                   CONTENTS, READONLY, DEBUGGING, OCTETS
- 18 .debug_str    00114f42  00000000  00000000  0008dc2f  2**0
+ 18 .debug_str    00114f42  00000000  00000000  0008dc81  2**0
                   CONTENTS, READONLY, DEBUGGING, OCTETS
- 19 .comment      00000043  00000000  00000000  001a2b71  2**0
+ 19 .comment      00000043  00000000  00000000  001a2bc3  2**0
                   CONTENTS, READONLY
- 20 .debug_frame  0000933c  00000000  00000000  001a2bb4  2**2
+ 20 .debug_frame  0000933c  00000000  00000000  001a2c08  2**2
                   CONTENTS, READONLY, DEBUGGING, OCTETS
- 21 .debug_line_str 00000064  00000000  00000000  001abef0  2**0
+ 21 .debug_line_str 00000064  00000000  00000000  001abf44  2**0
                   CONTENTS, READONLY, DEBUGGING, OCTETS
 
 Disassembly of section .text:
@@ -1342,19 +1342,20 @@ Disassembly of section .text:
  800101e:	bf00      	nop
 
 08001020 <BQ76920_Init>:
+/**
   * @brief  Initializes the BQ76920 IC
   * @param  hi2c: Pointer to the I2C handle
   * @retval HAL_StatusTypeDef
   */
-HAL_StatusTypeDef BQ76920_Init(I2C_HandleTypeDef *hi2c)
-{
+HAL_StatusTypeDef BQ76920_Init(I2C_HandleTypeDef *hi2c) {
  8001020:	b580      	push	{r7, lr}
  8001022:	b088      	sub	sp, #32
  8001024:	af04      	add	r7, sp, #16
  8001026:	6078      	str	r0, [r7, #4]
-    uint8_t sys_stat = 0;
+    uint8_t sys_stat = 0;  // A little box to hold the warning lights
  8001028:	2300      	movs	r3, #0
  800102a:	737b      	strb	r3, [r7, #13]
+    // Pick the right phone number for this chip (shifted because I2C needs it this way)
     uint16_t i2c_addr = (hi2c == &hi2c1) ? (BQ76920_I2C_ADDRESS_1 << 1) : (BQ76920_I2C_ADDRESS_2 << 1);
  800102c:	687b      	ldr	r3, [r7, #4]
  800102e:	4a0d      	ldr	r2, [pc, #52]	@ (8001064 <BQ76920_Init+0x44>)
@@ -1364,6 +1365,7 @@ HAL_StatusTypeDef BQ76920_Init(I2C_HandleTypeDef *hi2c)
  8001036:	e000      	b.n	800103a <BQ76920_Init+0x1a>
  8001038:	2312      	movs	r3, #18
  800103a:	81fb      	strh	r3, [r7, #14]
+    // Ask the chip: "Are you there?" by reading its status notebook
     return HAL_I2C_Mem_Read(hi2c, i2c_addr, SYS_STAT_REG, 1, &sys_stat, 1, HAL_MAX_DELAY);
  800103c:	89f9      	ldrh	r1, [r7, #14]
  800103e:	f04f 33ff 	mov.w	r3, #4294967295
@@ -1390,8 +1392,8 @@ HAL_StatusTypeDef BQ76920_Init(I2C_HandleTypeDef *hi2c)
   * @param  offset: Offset in the array to store the voltages
   * @retval HAL_StatusTypeDef
   */
-HAL_StatusTypeDef BQ76920_ReadVoltages(I2C_HandleTypeDef *hi2c, uint16_t *group_voltages, uint8_t offset)
-{
+// This checks how full each battery is
+HAL_StatusTypeDef BQ76920_ReadVoltages(I2C_HandleTypeDef *hi2c, uint16_t *group_voltages, uint8_t offset) {
  8001068:	b590      	push	{r4, r7, lr}
  800106a:	b08d      	sub	sp, #52	@ 0x34
  800106c:	af04      	add	r7, sp, #16
@@ -1399,7 +1401,7 @@ HAL_StatusTypeDef BQ76920_ReadVoltages(I2C_HandleTypeDef *hi2c, uint16_t *group_
  8001070:	60b9      	str	r1, [r7, #8]
  8001072:	4613      	mov	r3, r2
  8001074:	71fb      	strb	r3, [r7, #7]
-    uint8_t data[6];
+    uint8_t data[6];  // A box to hold 6 bytes (2 bytes per battery group)
     uint16_t i2c_addr = (hi2c == &hi2c1) ? (BQ76920_I2C_ADDRESS_1 << 1) : (BQ76920_I2C_ADDRESS_2 << 1);
  8001076:	68fb      	ldr	r3, [r7, #12]
  8001078:	4a2d      	ldr	r2, [pc, #180]	@ (8001130 <BQ76920_ReadVoltages+0xc8>)
@@ -1409,6 +1411,7 @@ HAL_StatusTypeDef BQ76920_ReadVoltages(I2C_HandleTypeDef *hi2c, uint16_t *group_
  8001080:	e000      	b.n	8001084 <BQ76920_ReadVoltages+0x1c>
  8001082:	2312      	movs	r3, #18
  8001084:	83bb      	strh	r3, [r7, #28]
+    // Ask the chip for the voltage notebook
     HAL_StatusTypeDef status = HAL_I2C_Mem_Read(hi2c, i2c_addr, VC1_HI_REG, 1, data, 6, HAL_MAX_DELAY);
  8001086:	8bb9      	ldrh	r1, [r7, #28]
  8001088:	f04f 33ff 	mov.w	r3, #4294967295
@@ -1423,18 +1426,19 @@ HAL_StatusTypeDef BQ76920_ReadVoltages(I2C_HandleTypeDef *hi2c, uint16_t *group_
  800109e:	f006 fbff 	bl	80078a0 <HAL_I2C_Mem_Read>
  80010a2:	4603      	mov	r3, r0
  80010a4:	76fb      	strb	r3, [r7, #27]
-    if (status != HAL_OK) return status;
+    if (status != HAL_OK) return status;  // Oops, something went wrong!
  80010a6:	7efb      	ldrb	r3, [r7, #27]
  80010a8:	2b00      	cmp	r3, #0
  80010aa:	d001      	beq.n	80010b0 <BQ76920_ReadVoltages+0x48>
  80010ac:	7efb      	ldrb	r3, [r7, #27]
  80010ae:	e035      	b.n	800111c <BQ76920_ReadVoltages+0xb4>
 
+    // Turn the raw numbers into millivolts (like turning a code into a real number)
     for (uint8_t i = 0; i < NUM_GROUPS_PER_IC; i++) {
  80010b0:	2300      	movs	r3, #0
  80010b2:	77fb      	strb	r3, [r7, #31]
  80010b4:	e02e      	b.n	8001114 <BQ76920_ReadVoltages+0xac>
-        uint16_t raw = (data[i * 2] << 8) | data[i * 2 + 1];
+        uint16_t raw = (data[i * 2] << 8) | data[i * 2 + 1];  // Combine 2 bytes into 1 number
  80010b6:	7ffb      	ldrb	r3, [r7, #31]
  80010b8:	005b      	lsls	r3, r3, #1
  80010ba:	3320      	adds	r3, #32
@@ -1453,7 +1457,7 @@ HAL_StatusTypeDef BQ76920_ReadVoltages(I2C_HandleTypeDef *hi2c, uint16_t *group_
  80010d8:	4313      	orrs	r3, r2
  80010da:	b21b      	sxth	r3, r3
  80010dc:	833b      	strh	r3, [r7, #24]
-        group_voltages[offset + i] = raw * 0.382; // Convert to mV (approximate scaling)
+        group_voltages[offset + i] = raw * 0.382;  // Multiply by a magic number to get millivolts
  80010de:	8b3b      	ldrh	r3, [r7, #24]
  80010e0:	4618      	mov	r0, r3
  80010e2:	f7ff fa1f 	bl	8000524 <__aeabi_i2d>
@@ -1482,7 +1486,7 @@ HAL_StatusTypeDef BQ76920_ReadVoltages(I2C_HandleTypeDef *hi2c, uint16_t *group_
  8001116:	2b02      	cmp	r3, #2
  8001118:	d9cd      	bls.n	80010b6 <BQ76920_ReadVoltages+0x4e>
     }
-    return HAL_OK;
+    return HAL_OK;  // All done!
  800111a:	2300      	movs	r3, #0
 }
  800111c:	4618      	mov	r0, r3
@@ -1500,14 +1504,14 @@ HAL_StatusTypeDef BQ76920_ReadVoltages(I2C_HandleTypeDef *hi2c, uint16_t *group_
   * @param  current: Pointer to store the current (in mA)
   * @retval HAL_StatusTypeDef
   */
-HAL_StatusTypeDef BQ76920_ReadCurrent(I2C_HandleTypeDef *hi2c, int16_t *current)
-{
+// This checks how much power is flowing
+HAL_StatusTypeDef BQ76920_ReadCurrent(I2C_HandleTypeDef *hi2c, int16_t *current) {
  8001138:	b580      	push	{r7, lr}
  800113a:	b088      	sub	sp, #32
  800113c:	af04      	add	r7, sp, #16
  800113e:	6078      	str	r0, [r7, #4]
  8001140:	6039      	str	r1, [r7, #0]
-    uint8_t data[2];
+    uint8_t data[2];  // A box for 2 bytes
     uint16_t i2c_addr = (hi2c == &hi2c1) ? (BQ76920_I2C_ADDRESS_1 << 1) : (BQ76920_I2C_ADDRESS_2 << 1);
  8001142:	687b      	ldr	r3, [r7, #4]
  8001144:	4a22      	ldr	r2, [pc, #136]	@ (80011d0 <BQ76920_ReadCurrent+0x98>)
@@ -1517,6 +1521,7 @@ HAL_StatusTypeDef BQ76920_ReadCurrent(I2C_HandleTypeDef *hi2c, int16_t *current)
  800114c:	e000      	b.n	8001150 <BQ76920_ReadCurrent+0x18>
  800114e:	2312      	movs	r3, #18
  8001150:	81fb      	strh	r3, [r7, #14]
+    // Ask the chip for the power flow notebook
     HAL_StatusTypeDef status = HAL_I2C_Mem_Read(hi2c, i2c_addr, CC_HI_REG, 1, data, 2, HAL_MAX_DELAY);
  8001152:	89f9      	ldrh	r1, [r7, #14]
  8001154:	f04f 33ff 	mov.w	r3, #4294967295
@@ -1538,7 +1543,8 @@ HAL_StatusTypeDef BQ76920_ReadCurrent(I2C_HandleTypeDef *hi2c, int16_t *current)
  8001178:	7b7b      	ldrb	r3, [r7, #13]
  800117a:	e01f      	b.n	80011bc <BQ76920_ReadCurrent+0x84>
 
-    *current = (int16_t)((data[0] << 8) | data[1]);
+    // Turn the raw number into milliamps
+    *current = (int16_t)((data[0] << 8) | data[1]);  // Combine 2 bytes
  800117c:	7a3b      	ldrb	r3, [r7, #8]
  800117e:	b21b      	sxth	r3, r3
  8001180:	021b      	lsls	r3, r3, #8
@@ -1549,7 +1555,7 @@ HAL_StatusTypeDef BQ76920_ReadCurrent(I2C_HandleTypeDef *hi2c, int16_t *current)
  800118a:	b21a      	sxth	r2, r3
  800118c:	683b      	ldr	r3, [r7, #0]
  800118e:	801a      	strh	r2, [r3, #0]
-    *current *= 8.44; // Convert to mA (approximate scaling)
+    *current *= 8.44;  // Multiply by a magic number to get milliamps
  8001190:	683b      	ldr	r3, [r7, #0]
  8001192:	f9b3 3000 	ldrsh.w	r3, [r3]
  8001196:	4618      	mov	r0, r3
@@ -1583,8 +1589,8 @@ HAL_StatusTypeDef BQ76920_ReadCurrent(I2C_HandleTypeDef *hi2c, int16_t *current)
   * @param  balancing_mask: Pointer to store the balancing bitmask
   * @retval HAL_StatusTypeDef
   */
-HAL_StatusTypeDef BQ76920_BalanceCells(I2C_HandleTypeDef *hi2c, uint16_t *group_voltages, uint8_t offset, uint8_t *balancing_mask)
-{
+// This balances the batteries so they’re all about the same
+HAL_StatusTypeDef BQ76920_BalanceCells(I2C_HandleTypeDef *hi2c, uint16_t *group_voltages, uint8_t offset, uint8_t *balancing_mask) {
  80011d4:	b580      	push	{r7, lr}
  80011d6:	b08a      	sub	sp, #40	@ 0x28
  80011d8:	af04      	add	r7, sp, #16
@@ -1593,11 +1599,11 @@ HAL_StatusTypeDef BQ76920_BalanceCells(I2C_HandleTypeDef *hi2c, uint16_t *group_
  80011de:	603b      	str	r3, [r7, #0]
  80011e0:	4613      	mov	r3, r2
  80011e2:	71fb      	strb	r3, [r7, #7]
-    *balancing_mask = 0;
+    *balancing_mask = 0;  // Start with no balancing
  80011e4:	683b      	ldr	r3, [r7, #0]
  80011e6:	2200      	movs	r2, #0
  80011e8:	701a      	strb	r2, [r3, #0]
-    uint16_t min_voltage = group_voltages[offset];
+    uint16_t min_voltage = group_voltages[offset];  // Find the emptiest battery
  80011ea:	79fb      	ldrb	r3, [r7, #7]
  80011ec:	005b      	lsls	r3, r3, #1
  80011ee:	68ba      	ldr	r2, [r7, #8]
@@ -1636,11 +1642,12 @@ HAL_StatusTypeDef BQ76920_BalanceCells(I2C_HandleTypeDef *hi2c, uint16_t *group_
  800122a:	d9e7      	bls.n	80011fc <BQ76920_BalanceCells+0x28>
     }
 
+    // If a battery is much fuller (50 mV more), mark it for balancing
     for (uint8_t i = 0; i < NUM_GROUPS_PER_IC; i++) {
  800122c:	2300      	movs	r3, #0
  800122e:	753b      	strb	r3, [r7, #20]
  8001230:	e01b      	b.n	800126a <BQ76920_BalanceCells+0x96>
-        if (group_voltages[offset + i] > min_voltage + 50) { // 50 mV threshold
+        if (group_voltages[offset + i] > min_voltage + 50) {
  8001232:	79fa      	ldrb	r2, [r7, #7]
  8001234:	7d3b      	ldrb	r3, [r7, #20]
  8001236:	4413      	add	r3, r2
@@ -1653,7 +1660,7 @@ HAL_StatusTypeDef BQ76920_BalanceCells(I2C_HandleTypeDef *hi2c, uint16_t *group_
  8001244:	3332      	adds	r3, #50	@ 0x32
  8001246:	429a      	cmp	r2, r3
  8001248:	dd0c      	ble.n	8001264 <BQ76920_BalanceCells+0x90>
-            *balancing_mask |= (1 << i);
+            *balancing_mask |= (1 << i);  // Turn on a switch for this battery
  800124a:	683b      	ldr	r3, [r7, #0]
  800124c:	781b      	ldrb	r3, [r3, #0]
  800124e:	b25a      	sxtb	r2, r3
@@ -1676,6 +1683,7 @@ HAL_StatusTypeDef BQ76920_BalanceCells(I2C_HandleTypeDef *hi2c, uint16_t *group_
         }
     }
 
+    // Tell the chip which batteries to balance
     uint16_t i2c_addr = (hi2c == &hi2c1) ? (BQ76920_I2C_ADDRESS_1 << 1) : (BQ76920_I2C_ADDRESS_2 << 1);
  8001270:	68fb      	ldr	r3, [r7, #12]
  8001272:	4a0c      	ldr	r2, [pc, #48]	@ (80012a4 <BQ76920_BalanceCells+0xd0>)
@@ -7682,7 +7690,7 @@ static void MX_TIM4_Init(void)
     HAL_TIM_PWM_MspInit(&htim4);
  8003d34:	4803      	ldr	r0, [pc, #12]	@ (8003d44 <MX_TIM4_Init+0xc4>)
  8003d36:	f000 fac7 	bl	80042c8 <HAL_TIM_PWM_MspInit>
-    //HAL_TIM_MspPostInit(&htim4);
+
         /* USER CODE END TIM4_Init 2 */
 }
  8003d3a:	bf00      	nop
