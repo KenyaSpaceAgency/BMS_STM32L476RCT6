@@ -22,7 +22,33 @@ Imagine a timeline with two repeating steps:
 
 \[Start\] --> \[Prediction\] --> \[Update\] --> \[New Guess\] --> \[Repeat\]
 
-+---------+ | Start | (Oval) +---------+ | V+-------------+| Prediction | (Rectangle)+-------------+ | V+-------------+| Update | (Rectangle)+-------------+ | V+-------------+| New Guess | (Rectangle)+-------------+ | |<-----------+ | "Repeat" | V |+-------------+ || Prediction |----++-------------+
+
+```
++---------+
+|  Start  | 
++---------+
+    |
+    V
++-------------+
+| Prediction  | 
++-------------+
+    |
+    V
++-------------+
+|   Update    | 
++-------------+
+    |
+    V
++-------------+
+|  New Guess  | 
++-------------+
+    |
+    |<-----------+
+    | "Repeat"   |
+    V            |
++-------------+  |
+| Prediction  |--+
++-------------+
 
 ### Purpose in the Code
 
