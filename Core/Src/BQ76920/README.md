@@ -51,7 +51,44 @@ Register Definitions
 
 The BQ76920 keeps info in little “notebooks” called **registers**. Here’s what we use:
 
-**Register NameAddressWhat It Does**SYS\_STAT\_REG0x00Shows if something’s wrong (like a warning light).VC1\_HI\_REG0x0CHolds the power levels of battery parts (cells).CC\_HI\_REG0x32Tracks how much energy flows in or out.CELLBAL1\_REG0x01Controls which battery parts to balance.SYS\_CTRL2\_REG0x05Turns charging or power-giving on/off.
+## Register Definitions
+
+The BQ76920 keeps information in little “notebooks” called registers. Here’s what we use:
+
+| Register Name   | Address | Description                                      |
+|-----------------|---------|--------------------------------------------------|
+| SYS_STAT_REG    | 0x00    | Shows if something’s wrong (like a warning light).|
+| VC1_HI_REG      | 0x0C    | Holds the power levels of battery parts (cells). |
+| CC_HI_REG       | 0x32    | Tracks how much energy flows in or out.          |
+| CELLBAL1_REG    | 0x01    | Controls which battery parts to balance.         |
+| SYS_CTRL2_REG   | 0x05    | Turns charging or power-giving on/off.           |
+
+## Pin Description (EPS_BMS Schematic)
+
+Here’s how the BQ76920 (IC2) is wired in the EPS_BMS schematic:
+
+| Pin Number | Pin Name | Description                                                                 |
+|------------|----------|-----------------------------------------------------------------------------|
+| 1          | DSG      | Controls the discharge switch (Q12) to let the battery power the satellite. |
+| 2          | CHG      | Controls the charge switch (Q6) to let power into the battery.              |
+| 3          | VSS      | Ground pin, the “zero” point for electricity (tied to PACK- via R54).       |
+| 4          | SDA      | Data wire to talk to the microcontroller (I2C1_SDA).                        |
+| 5          | SCL      | Clock wire to keep talking in sync (I2C1_SCL).                              |
+| 6          | TS1      | Checks battery temperature with a sensor (connected to NTC via R53).        |
+| 7          | CAP1     | Might steady power with a capacitor (not key for charging here).            |
+| 8          | REGOUT   | Makes 3.3V power for small parts (like a mini power supply).                |
+| 9          | REGSRC   | Gets power from the battery (PACK+ via R32) to run the chip.                |
+| 10         | BAT      | Measures the total battery voltage (connected to PACK+).                    |
+| 11         | BOOT     | Wakes the chip up (connected to PB4 via a circuit).                         |
+| 12         | VC5      | Not used (only 3 cells here).                                               |
+| 13         | VC4      | Not used (only 3 cells).                                                    |
+| 14         | VC3      | Measures the third cell’s voltage (3S).                                     |
+| 15         | VC2      | Measures the second cell’s voltage (2S).                                    |
+| 16         | VC1      | Measures the first cell’s voltage (1S).                                     |
+| 17         | VC0      | Bottom of the battery (ground, tied to PACK-).                              |
+| 18         | SRP      | One side of a tiny resistor (R54) to measure current.                       |
+| 19         | SRN      | Other side of R54 for current measurement.                                  |
+| 20         | ALERT    | Warns if something’s wrong (lights DS1 and signals PB5).                    |
 
 Pin Description (EPS\_BMS Schematic)
 ------------------------------------
