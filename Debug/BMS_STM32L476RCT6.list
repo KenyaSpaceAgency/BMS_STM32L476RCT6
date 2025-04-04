@@ -9336,24 +9336,26 @@ void SystemInit(void)
  8004688:	e000ed00 	.word	0xe000ed00
 
 0800468c <CalculateCRC32>:
-    0xAED16A4A, 0xD9D65ADC, 0x40DF0B66, 0x37D83BF0, 0xA9BCAE53, 0xDEBB9EC5, 0x47B2CF7F, 0x30B5FFE9,
     0xBDBDF21C, 0xCABAC28A, 0x53B39330, 0x24B4A3A6, 0xBAD03605, 0xCDD70693, 0x54DE5729, 0x23D967BF,
     0xB3667A2E, 0xC4614AB8, 0x5D681B02, 0x2A6F2B94, 0xB40BBE37, 0xC30C8EA1, 0x5A05DF1B, 0x2D02EF8D
 };
 
+// This makes the special CRC32 code to check if data is okay
 uint32_t CalculateCRC32(const uint8_t *data, uint32_t length) {
  800468c:	b480      	push	{r7}
  800468e:	b085      	sub	sp, #20
  8004690:	af00      	add	r7, sp, #0
  8004692:	6078      	str	r0, [r7, #4]
  8004694:	6039      	str	r1, [r7, #0]
-    uint32_t crc = 0xFFFFFFFF;
+    uint32_t crc = 0xFFFFFFFF; // Start with a big number (like a blank canvas)
  8004696:	f04f 33ff 	mov.w	r3, #4294967295
  800469a:	60fb      	str	r3, [r7, #12]
+    // Look at each piece of data (like each letter in a word)
     for (uint32_t i = 0; i < length; i++) {
  800469c:	2300      	movs	r3, #0
  800469e:	60bb      	str	r3, [r7, #8]
  80046a0:	e010      	b.n	80046c4 <CalculateCRC32+0x38>
+        // Mix the data with our recipe book to make the code
         crc = (crc >> 8) ^ crc32_table[(crc & 0xFF) ^ data[i]];
  80046a2:	68fb      	ldr	r3, [r7, #12]
  80046a4:	0a1a      	lsrs	r2, r3, #8
@@ -9377,7 +9379,8 @@ uint32_t CalculateCRC32(const uint8_t *data, uint32_t length) {
  80046c8:	429a      	cmp	r2, r3
  80046ca:	d3ea      	bcc.n	80046a2 <CalculateCRC32+0x16>
     }
-    return crc ^ 0xFFFFFFFF;
+    // Finish the code with a final twist
+    return crc ^ 0xFFFFFFFF; // Give back the special number
  80046cc:	68fb      	ldr	r3, [r7, #12]
  80046ce:	43db      	mvns	r3, r3
 }
@@ -9389,9 +9392,9 @@ uint32_t CalculateCRC32(const uint8_t *data, uint32_t length) {
  80046dc:	0801169c 	.word	0x0801169c
 
 080046e0 <KalmanFilter_Init>:
-  * @param  process_noise: Process noise covariance (Q)
-  * @param  measurement_noise: Measurement noise covariance (R)
-  * @retval None
+  * @param  process_noise: How wobbly our battery’s behavior might be (Q)
+  * @param  measurement_noise: How shaky our sensor readings are (R)
+  * @retval None (just sets things up)
   */
 void KalmanFilter_Init(KalmanFilter *kf, float initial_state, float initial_variance, float process_noise, float measurement_noise)
 {
@@ -9403,19 +9406,19 @@ void KalmanFilter_Init(KalmanFilter *kf, float initial_state, float initial_vari
  80046ec:	edc7 0a03 	vstr	s1, [r7, #12]
  80046f0:	ed87 1a02 	vstr	s2, [r7, #8]
  80046f4:	edc7 1a01 	vstr	s3, [r7, #4]
-    kf->state = initial_state;              // Set the initial state estimate (e.g., 50% for SOC)
+    kf->state = initial_state;              // Our first guess (e.g., 50% charge)
  80046f8:	697b      	ldr	r3, [r7, #20]
  80046fa:	693a      	ldr	r2, [r7, #16]
  80046fc:	601a      	str	r2, [r3, #0]
-    kf->variance = initial_variance;        // Set the initial uncertainty (variance)
+    kf->variance = initial_variance;        // How much we trust that guess (small = more trust)
  80046fe:	697b      	ldr	r3, [r7, #20]
  8004700:	68fa      	ldr	r2, [r7, #12]
  8004702:	605a      	str	r2, [r3, #4]
-    kf->process_noise = process_noise;      // Set the process noise covariance (Q)
+    kf->process_noise = process_noise;      // How much the battery might surprise us
  8004704:	697b      	ldr	r3, [r7, #20]
  8004706:	68ba      	ldr	r2, [r7, #8]
  8004708:	609a      	str	r2, [r3, #8]
-    kf->measurement_noise = measurement_noise; // Set the measurement noise covariance (R)
+    kf->measurement_noise = measurement_noise; // How much our sensors wiggle
  800470a:	697b      	ldr	r3, [r7, #20]
  800470c:	687a      	ldr	r2, [r7, #4]
  800470e:	60da      	str	r2, [r3, #12]
@@ -9427,9 +9430,9 @@ void KalmanFilter_Init(KalmanFilter *kf, float initial_state, float initial_vari
  800471a:	4770      	bx	lr
 
 0800471c <KalmanFilter_Update>:
-  * @param  kf: Pointer to the Kalman Filter structure
-  * @param  measurement: New measurement value (e.g., SOC in %)
-  * @retval Updated state estimate
+  * @param  kf: The filter’s toolbox with our current guess
+  * @param  measurement: A new, wobbly reading from the battery sensor
+  * @retval The updated, smoother guess (e.g., new SOC %)
   */
 float KalmanFilter_Update(KalmanFilter *kf, float measurement)
 {
@@ -9438,8 +9441,8 @@ float KalmanFilter_Update(KalmanFilter *kf, float measurement)
  8004720:	af00      	add	r7, sp, #0
  8004722:	6078      	str	r0, [r7, #4]
  8004724:	ed87 0a00 	vstr	s0, [r7]
-    // Prediction Step: Update the variance by adding process noise
-    // This accounts for uncertainty in the system model (e.g., coulomb counting errors)
+    // Step 1: Guess Ahead (Prediction)
+    // Add some wiggle room because the battery might change a bit on its own
     kf->variance += kf->process_noise;
  8004728:	687b      	ldr	r3, [r7, #4]
  800472a:	ed93 7a01 	vldr	s14, [r3, #4]
@@ -9449,8 +9452,8 @@ float KalmanFilter_Update(KalmanFilter *kf, float measurement)
  8004738:	687b      	ldr	r3, [r7, #4]
  800473a:	edc3 7a01 	vstr	s15, [r3, #4]
 
-    // Update (Correction) Step:
-    // 1. Compute the Kalman Gain: Determines how much to trust the new measurement
+    // Step 2: Fix the Guess (Update)
+    // Figure out how much to trust the new measurement vs. our old guess
     float kalman_gain = kf->variance / (kf->variance + kf->measurement_noise);
  800473e:	687b      	ldr	r3, [r7, #4]
  8004740:	edd3 6a01 	vldr	s13, [r3, #4]
@@ -9461,8 +9464,7 @@ float KalmanFilter_Update(KalmanFilter *kf, float measurement)
  8004750:	ee37 7a27 	vadd.f32	s14, s14, s15
  8004754:	eec6 7a87 	vdiv.f32	s15, s13, s14
  8004758:	edc7 7a03 	vstr	s15, [r7, #12]
-
-    // 2. Update the state estimate: Adjust the state based on the measurement residual
+    // Tweak our guess using the new reading, but only a little if it’s shaky
     kf->state += kalman_gain * (measurement - kf->state);
  800475c:	687b      	ldr	r3, [r7, #4]
  800475e:	ed93 7a00 	vldr	s14, [r3]
@@ -9475,8 +9477,7 @@ float KalmanFilter_Update(KalmanFilter *kf, float measurement)
  8004778:	ee77 7a27 	vadd.f32	s15, s14, s15
  800477c:	687b      	ldr	r3, [r7, #4]
  800477e:	edc3 7a00 	vstr	s15, [r3]
-
-    // 3. Update the variance: Reduce uncertainty based on the Kalman Gain
+    // We’re more sure now, so shrink the wiggle room
     kf->variance *= (1.0f - kalman_gain);
  8004782:	687b      	ldr	r3, [r7, #4]
  8004784:	ed93 7a01 	vldr	s14, [r3, #4]
@@ -9487,7 +9488,7 @@ float KalmanFilter_Update(KalmanFilter *kf, float measurement)
  8004798:	687b      	ldr	r3, [r7, #4]
  800479a:	edc3 7a01 	vstr	s15, [r3, #4]
 
-    // Return the updated state estimate
+    // Give back the new, smoother guess
     return kf->state;
  800479e:	687b      	ldr	r3, [r7, #4]
  80047a0:	681b      	ldr	r3, [r3, #0]

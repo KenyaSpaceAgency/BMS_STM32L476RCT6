@@ -195,10 +195,6 @@ Dependencies
 *   **Logging (Log\_Error):** Captures important system events.
     
 
-Constants and Macros
---------------------
-
-ConstantDescriptionTARGET\_TEMPDesired temperature setpoint (°C)TEMP\_UPPER\_LIMITMaximum allowable temperature (°C) before safety shutoffKP, KI, KDPID tuning parametersDTSampling interval (time step in seconds)
 
 Usage
 -----

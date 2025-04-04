@@ -38,4 +38,11 @@ void BQ76920_CheckProtection(I2C_HandleTypeDef *hi2c, uint16_t *group_voltages, 
 
 // Turn charging or discharging on/off
 HAL_StatusTypeDef BQ76920_SetChargeEnable(I2C_HandleTypeDef *hi2c, uint8_t charge_enable, uint8_t discharge_enable);
+/* Reads the SYS_STAT register from a BQ76920 chip */
+HAL_StatusTypeDef BQ76920_ReadStatus(I2C_HandleTypeDef *hi2c, uint8_t *status);
+/* Checks for discrepancies between two BQ76920 chips */
+void BQ76920_CheckRedundancy(uint16_t *voltages_1, uint16_t *voltages_2, int16_t current_1, int16_t current_2, uint8_t *discrepancy_flag);
+/* Updates error flags based on status from both BQ76920 chips */
+void BQ76920_CheckStatus(I2C_HandleTypeDef *hi2c1, I2C_HandleTypeDef *hi2c2, uint32_t *error_flags);
+
 #endif /* BQ76920_H_ */
