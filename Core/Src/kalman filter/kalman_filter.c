@@ -3,49 +3,51 @@
  *
  *  Created on: Mar 29, 2025
  *      Author: yomue
+ *
+ * This file is like a smart guesser for our satellite’s battery. It helps figure out
+ * how much power (SOC) and life (SOH) the battery has, even if our measurements are
+ * a bit shaky. It’s super important for keeping the battery safe in space!
  */
 
 #include "kalman_filter.h"
 
 /**
-  * @brief  Initializes the Kalman Filter with initial conditions
-  * @param  kf: Pointer to the Kalman Filter structure
-  * @param  initial_state: Initial estimate of the state (e.g., SOC in %)
-  * @param  initial_variance: Initial uncertainty in the state estimate
-  * @param  process_noise: Process noise covariance (Q)
-  * @param  measurement_noise: Measurement noise covariance (R)
-  * @retval None
+  * @brief  Sets up the Kalman Filter with starting info
+  * @param  kf: The filter’s toolbox we’re filling up
+  * @param  initial_state: Our first guess at the battery’s charge (e.g., 50%)
+  * @param  initial_variance: How unsure we are about that guess (bigger = less sure)
+  * @param  process_noise: How wobbly our battery’s behavior might be (Q)
+  * @param  measurement_noise: How shaky our sensor readings are (R)
+  * @retval None (just sets things up)
   */
 void KalmanFilter_Init(KalmanFilter *kf, float initial_state, float initial_variance, float process_noise, float measurement_noise)
 {
-    kf->state = initial_state;              // Set the initial state estimate (e.g., 50% for SOC)
-    kf->variance = initial_variance;        // Set the initial uncertainty (variance)
-    kf->process_noise = process_noise;      // Set the process noise covariance (Q)
-    kf->measurement_noise = measurement_noise; // Set the measurement noise covariance (R)
+    kf->state = initial_state;              // Our first guess (e.g., 50% charge)
+    kf->variance = initial_variance;        // How much we trust that guess (small = more trust)
+    kf->process_noise = process_noise;      // How much the battery might surprise us
+    kf->measurement_noise = measurement_noise; // How much our sensors wiggle
 }
 
 /**
-  * @brief  Updates the Kalman Filter with a new measurement
-  * @param  kf: Pointer to the Kalman Filter structure
-  * @param  measurement: New measurement value (e.g., SOC in %)
-  * @retval Updated state estimate
+  * @brief  Makes a new, better guess using a fresh measurement
+  * @param  kf: The filter’s toolbox with our current guess
+  * @param  measurement: A new, wobbly reading from the battery sensor
+  * @retval The updated, smoother guess (e.g., new SOC %)
   */
 float KalmanFilter_Update(KalmanFilter *kf, float measurement)
 {
-    // Prediction Step: Update the variance by adding process noise
-    // This accounts for uncertainty in the system model (e.g., coulomb counting errors)
+    // Step 1: Guess Ahead (Prediction)
+    // Add some wiggle room because the battery might change a bit on its own
     kf->variance += kf->process_noise;
 
-    // Update (Correction) Step:
-    // 1. Compute the Kalman Gain: Determines how much to trust the new measurement
+    // Step 2: Fix the Guess (Update)
+    // Figure out how much to trust the new measurement vs. our old guess
     float kalman_gain = kf->variance / (kf->variance + kf->measurement_noise);
-
-    // 2. Update the state estimate: Adjust the state based on the measurement residual
+    // Tweak our guess using the new reading, but only a little if it’s shaky
     kf->state += kalman_gain * (measurement - kf->state);
-
-    // 3. Update the variance: Reduce uncertainty based on the Kalman Gain
+    // We’re more sure now, so shrink the wiggle room
     kf->variance *= (1.0f - kalman_gain);
 
-    // Return the updated state estimate
+    // Give back the new, smoother guess
     return kf->state;
 }

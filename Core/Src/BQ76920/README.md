@@ -51,7 +51,6 @@ Register Definitions
 
 The BQ76920 keeps info in little “notebooks” called **registers**. Here’s what we use:
 
-## Register Definitions
 
 The BQ76920 keeps information in little “notebooks” called registers. Here’s what we use:
 
@@ -90,12 +89,6 @@ Here’s how the BQ76920 (IC2) is wired in the EPS_BMS schematic:
 | 19         | SRN      | Other side of R54 for current measurement.                                  |
 | 20         | ALERT    | Warns if something’s wrong (lights DS1 and signals PB5).                    |
 
-Pin Description (EPS\_BMS Schematic)
-------------------------------------
-
-Here’s how the BQ76920 (IC2) is wired in the **EPS\_BMS** schematic:
-
-**Pin NumberPin NameDescription**1DSGControls the discharge switch (Q12) to let the battery power the satellite.2CHGControls the charge switch (Q6) to let power into the battery.3VSSGround pin, the “zero” point for electricity (tied to PACK- via R54).4SDAData wire to talk to the microcontroller (I2C1\_SDA).5SCLClock wire to keep talking in sync (I2C1\_SCL).6TS1Checks battery temperature with a sensor (connected to NTC via R53).7CAP1Might steady power with a capacitor (not key for charging here).8REGOUTMakes 3.3V power for small parts (like a mini power supply).9REGSRCGets power from the battery (PACK+ via R32) to run the chip.10BATMeasures the total battery voltage (connected to PACK+).11BOOTWakes the chip up (connected to PB4 via a circuit).12VC5Not used (only 3 cells here).13VC4Not used (only 3 cells).14VC3Measures the third cell’s voltage (3S).15VC2Measures the second cell’s voltage (2S).16VC1Measures the first cell’s voltage (1S).17VC0Bottom of the battery (ground, tied to PACK-).18SRPOne side of a tiny resistor (R54) to measure current.19SRNOther side of R54 for current measurement.20ALERTWarns if something’s wrong (lights DS1 and signals PB5).
 
 ### Key Connections
 

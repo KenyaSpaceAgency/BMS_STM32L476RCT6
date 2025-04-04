@@ -1,15 +1,17 @@
 /*
- * cccv.c
+ * crc32.c
  *
  *  Created on: Apr 2, 2025
  *      Author: yomue
+ *
+ * This file helps check if data (like new software) is correct by making a special
+ * code called CRC32. It’s used to keep our satellite’s battery system safe!
  */
 
+#include "crc32.h" // Tells the code where to find the CRC32 tool’s instructions
 
-// Core/Src/crc32.c
-#include "crc32.h"
-
-// CRC32 lookup table (polynomial 0x04C11DB7)
+// This is a big list (256 numbers) that helps make the CRC32 code. It’s like a secret
+// recipe book based on a math rule (polynomial 0x04C11DB7) to mix up the data.
 static const uint32_t crc32_table[256] = {
     0x00000000, 0x77073096, 0xEE0E612C, 0x990951BA, 0x076DC419, 0x706AF48F, 0xE963A535, 0x9E6495A3,
     0x0EDB8832, 0x79DCB8A4, 0xE0D5E91E, 0x97D2D988, 0x09B64C2B, 0x7EB17CBD, 0xE7B82D07, 0x90BF1D91,
@@ -45,10 +47,14 @@ static const uint32_t crc32_table[256] = {
     0xB3667A2E, 0xC4614AB8, 0x5D681B02, 0x2A6F2B94, 0xB40BBE37, 0xC30C8EA1, 0x5A05DF1B, 0x2D02EF8D
 };
 
+// This makes the special CRC32 code to check if data is okay
 uint32_t CalculateCRC32(const uint8_t *data, uint32_t length) {
-    uint32_t crc = 0xFFFFFFFF;
+    uint32_t crc = 0xFFFFFFFF; // Start with a big number (like a blank canvas)
+    // Look at each piece of data (like each letter in a word)
     for (uint32_t i = 0; i < length; i++) {
+        // Mix the data with our recipe book to make the code
         crc = (crc >> 8) ^ crc32_table[(crc & 0xFF) ^ data[i]];
     }
-    return crc ^ 0xFFFFFFFF;
+    // Finish the code with a final twist
+    return crc ^ 0xFFFFFFFF; // Give back the special number
 }
