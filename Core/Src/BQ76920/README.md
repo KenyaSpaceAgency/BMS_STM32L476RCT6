@@ -2,6 +2,122 @@ BQ76920 Battery Management System (BMS) Driver Documentation
 ============================================================
 
 Overview
+This C-based driver controls the **BQ76920**, a chip that watches over the battery in the **AFDEVSAT satellite’s Electrical Power System (EPS)**. It’s part of the **EPS\_BMS** (Battery Management System), one of three main parts of the satellite’s power setup, alongside the **EPS\_Solar** (solar panels) and **EPS\_PDM** (power distribution). The BQ76920 driver uses **I2C** (a way for chips to talk over wires) to do these jobs:
+
+*   **Wakes up the chip** to get it ready.
+    
+*   **Checks battery voltages** to see how full each part is.
+    
+*   **Measures current** to track energy flow.
+    
+*   **Balances the battery** so all parts stay even.
+    
+*   **Spots problems** like too much or too little power.
+    
+*   **Controls charging** with a special CC-CV (Constant Current-Constant Voltage) method.
+    
+
+The driver runs on an **STM32L476RCT6 microcontroller** (a tiny computer brain) using the **STM32 HAL library** (helper tools) and works with two BQ76920 chips for extra safety.
+
+### EPS Context
+
+The EPS has three parts:
+
+1.  **EPS\_BMS**: Manages the battery (this driver’s home).
+    
+2.  **EPS\_Solar**: Uses solar panels and an LT3652HV chip to make power from sunlight.
+    
+3.  **EPS\_PDM**: Shares power with the satellite’s other systems.
+    
+
+The **EPS\_BMS** is the boss of charging the battery, using this driver to run the CC-CV charging plan and turn the charger on or off.
+
+Dependencies
+------------
+
+To work, this driver needs:
+
+*   **STM32 HAL Library**: Tools to help the microcontroller talk to the BQ76920 over I2C.
+    
+*   **BQ76920 Chips**: Two of these monitor the battery (IC2 and IC4 in the schematic).
+    
+*   **I2C Wires**: Connect the microcontroller to the chips (like a phone line).
+    
+*   **STM32L476RCT6**: The brain running the driver.
+    
+
+Register Definitions
+--------------------
+
+The BQ76920 keeps info in little “notebooks” called **registers**. Here’s what we use:
+
+**Register NameAddressWhat It Does**SYS\_STAT\_REG0x00Shows if something’s wrong (like a warning light).VC1\_HI\_REG0x0CHolds the power levels of battery parts (cells).CC\_HI\_REG0x32Tracks how much energy flows in or out.CELLBAL1\_REG0x01Controls which battery parts to balance.SYS\_CTRL2\_REG0x05Turns charging or power-giving on/off.
+
+Pin Description (EPS\_BMS Schematic)
+------------------------------------
+
+Here’s how the BQ76920 (IC2) is wired in the **EPS\_BMS** schematic:
+
+**Pin NumberPin NameDescription**1DSGControls the discharge switch (Q12) to let the battery power the satellite.2CHGControls the charge switch (Q6) to let power into the battery.3VSSGround pin, the “zero” point for electricity (tied to PACK- via R54).4SDAData wire to talk to the microcontroller (I2C1\_SDA).5SCLClock wire to keep talking in sync (I2C1\_SCL).6TS1Checks battery temperature with a sensor (connected to NTC via R53).7CAP1Might steady power with a capacitor (not key for charging here).8REGOUTMakes 3.3V power for small parts (like a mini power supply).9REGSRCGets power from the battery (PACK+ via R32) to run the chip.10BATMeasures the total battery voltage (connected to PACK+).11BOOTWakes the chip up (connected to PB4 via a circuit).12VC5Not used (only 3 cells here).13VC4Not used (only 3 cells).14VC3Measures the third cell’s voltage (3S).15VC2Measures the second cell’s voltage (2S).16VC1Measures the first cell’s voltage (1S).17VC0Bottom of the battery (ground, tied to PACK-).18SRPOne side of a tiny resistor (R54) to measure current.19SRNOther side of R54 for current measurement.20ALERTWarns if something’s wrong (lights DS1 and signals PB5).
+
+### Key Connections
+
+*   **PACK+ & PACK-**: The battery’s positive and negative ends.
+    
+*   **LOAD+ & LOAD-**: Connect to a power bus (shared with EPS\_Solar and EPS\_PDM).
+    
+*   **Q6 (CHG MOSFET)**: Turns charging on/off.
+    
+*   **Q12 (DSG MOSFET)**: Turns power-giving on/off.
+    
+*   **R54 (Shunt)**: Measures energy flow for the CC-CV plan.
+
+
+CC-CV Charging in EPS\_BMS
+--------------------------
+
+### Why EPS\_BMS Handles CC-CV
+
+*   **Simple**: The BMS is like the battery’s babysitter—it decides how fast to fill it with power (CC) and when to slow down (CV) to keep it safe. The solar part (EPS\_Solar) just gives power to a big “power highway” (bus), and the BMS uses it smartly.
+    
+*   **Tech**:
+    
+    *   The **LT3652HV** in EPS\_Solar does MPPT (gets the most from solar panels) and powers a bus (e.g., 12V).
+        
+    *   The **EPS\_BMS** connects to this bus via LOAD+/LOAD-, using the BQ76920 and Q6 to control charging.
+        
+    *   The STM32 firmware’s ChargeBattery function runs the CC-CV plan, watching voltage/current from the BQ76920 and switching Q6 on/off.
+        
+
+### How It Works
+
+1.  **Power Flow**:
+    
+    *   **Charging**: Solar power → LT3652HV → Power Bus → LOAD+/LOAD- → Battery (PACK+/PACK- via Q6).
+        
+    *   **Discharging**: Battery → LOAD+/LOAD- → Power Bus → EPS\_PDM → Satellite systems (via Q12).
+        
+2.  **CC-CV Steps**:
+    
+    *   **Constant Current (CC)**: Fills the battery fast until it’s nearly full (e.g., 4.2V per cell).
+        
+    *   **Constant Voltage (CV)**: Slows down to keep it at 4.2V until fully charged.
+        
+3.  **Control**: The BQ76920 turns Q6 on/off via CHG pin, guided by the firmware.
+    
+
+NTR3C21NZT3G MOSFETs (Q1-Q4, Q7-Q10)
+------------------------------------
+
+*   **Simple**: These are tiny switches (8 of them) that help even out the battery parts—they’re not for the main charging but help keep things balanced.
+    
+*   **Tech**:
+    
+    *   Controlled by BQ76920 CBx pins to drain extra power from high cells.
+        
+    *   Not in the main charge/discharge path (that’s Q6/Q12, bigger CSD19536KTT MOSFETs).
+        
+    *   Possible extras (e.g., Q9/Q10) might switch heaters or sensors.
 --------
 
 Imagine you have a bunch of batteries powering something important, like a toy robot or an electric scooter. These batteries need someone to watch over them to make sure they don’t get too full (overcharged), too empty (drained), or too hot. That’s where the **BQ76920** chip comes in—it’s like a tiny babysitter for batteries! This project is a set of instructions (called a "driver") written in the C language that tells the **STM32 microcontroller** (a small computer brain) how to talk to the BQ76920 chip using a special wire called **I2C**.
@@ -111,4 +227,3 @@ Key Features & Benefits
 
 
 
-#include "BQ76920.h"#include "main.h"int main() { I2C\_HandleTypeDef hi2c1; _// Our phone line to the chip_ BQ76920\_Init(&hi2c1); _// Say “Hello” to the chip_ uint16\_t cell\_voltages\[3\]; _// A list for 3 battery parts_ int16\_t current; _// A number for the energy flow_ uint8\_t ov\_flag, uv\_flag; _// Warning flags_ _// Get the voltages_ if (BQ76920\_ReadVoltages(&hi2c1, cell\_voltages, 0) == HAL\_OK) { printf("First part has %d mV\\n", cell\_voltages\[0\]); _// Show the power_ } _// Get the current_ if (BQ76920\_ReadCurrent(&hi2c1, ¤t) == HAL\_OK) { printf("Energy flow is %d mA\\n", current); } _// Check for trouble_ BQ76920\_CheckProtection(&hi2c1, cell\_voltages, 0, &ov\_flag, &uv\_flag); if (ov\_flag) printf("Too much power!\\n"); if (uv\_flag) printf("Not enough power!\\n"); return 0;}
