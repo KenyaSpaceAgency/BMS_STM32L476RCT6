@@ -27,28 +27,79 @@ Imagine a timeline with two repeating steps:
 +---------+
 |  Start  | 
 +---------+
-    |
-    V
-+-------------+
-| Prediction  | 
-+-------------+
-    |
-    V
-+-------------+
-|   Update    | 
-+-------------+
-    |
-    V
-+-------------+
-|  New Guess  | 
-+-------------+
-    |
-    |<-----------+
+	|
+	|<-----------+
+    |    "Repeat"|
+    V            |
++-------------+  |
+| Prediction  |  |
++-------------+  |
+    |            |
+    V            |
++-------------+  |
+|   Update    |  |
++-------------+  |
+    |            |
+    V            |
++-------------+  |
+|  New Guess  |  |
++-------------+  |
+    |            |
+    |            |
     | "Repeat"   |
     V            |
 +-------------+  |
 | Prediction  |--+
 +-------------+
+
+#### 1\. Prediction Step
+
+### Key Symbols
+| Symbol | Meaning                          |
+|--------|----------------------------------|
+| `x̂`    | State estimate                   |
+| `P`    | Error covariance matrix          |
+| `F`    | State transition model           |
+| `Q`    | Process noise covariance         |
+| `H`    | Observation model                |
+| `R`    | Measurement noise covariance     |
+| `K`    | Kalman Gain                      |
+| `z`    | Measurement vector               |
+
+\begin{aligned}
+x̂ₖ⁻ &= F x̂ₖ₋₁ \\
+Pₖ⁻ &= F Pₖ₋₁ F^T + Q
+\end{aligned}
+
+\[Old Guess: 50%\] --> \[Add Wiggle: +0.5\] --> \[New Guess: 50%, More Unsure\] (Variance: 1) (Process Noise) (Variance: 1.5)
+
+*   **Simple**: “Based on what I know, I think the battery’s charge will stay about the same, but I’ll add a little wiggle because things might shift a bit.”
+    
+*   **Tech**: Increases variance by process\_noise (Q) to account for uncertainty in the battery’s behavior (e.g., coulomb counting errors).
+
+#### 2\. Update Step
+
+\begin{aligned}
+Kₖ &= Pₖ⁻ H^T (H Pₖ⁻ H^T + R)^{-1} \\
+x̂ₖ &= x̂ₖ⁻ + Kₖ (zₖ - H x̂ₖ⁻) \\
+Pₖ &= (I - Kₖ H) Pₖ⁻
+\end{aligned}
+
+
+\[Guess: 50%, Var: 1.5\] + \[Shaky Reading: 49%\] --> \[Kalman Gain: 0.6\] --> \[New Guess: 49.4%, Var: 0.6\] (Smoother, More Sure)
+
+*   **Simple**: “Here’s a new shaky reading (say 49%). I’ll mix it with my guess to get a better one, trusting the reading more if my guess is wobbly.”
+    
+*   **Tech**:
+    
+    *   Calculates kalman\_gain (0 to 1) based on variance vs. measurement\_noise (R).
+        
+    *   Adjusts state toward the measurement, weighted by kalman\_gain.
+        
+    *   Shrinks variance since we’re more certain now.    
+   
+
+\[Old Guess: 50%\] --> \[Add Wiggle: +0.5\] --> \[New Guess: 50%, More Unsure\] (Variance: 1) (Process Noise) (Variance: 1.5)
 
 ### Purpose in the Code
 
