@@ -66,10 +66,7 @@ Imagine a timeline with two repeating steps:
 | `K`    | Kalman Gain                      |
 | `z`    | Measurement vector               |
 
-\begin{aligned}
-x̂ₖ⁻ &= F x̂ₖ₋₁ \\
-Pₖ⁻ &= F Pₖ₋₁ F^T + Q
-\end{aligned}
+
 
 \[Old Guess: 50%\] --> \[Add Wiggle: +0.5\] --> \[New Guess: 50%, More Unsure\] (Variance: 1) (Process Noise) (Variance: 1.5)
 
@@ -79,14 +76,12 @@ Pₖ⁻ &= F Pₖ₋₁ F^T + Q
 
 #### 2\. Update Step
 
-\begin{aligned}
-Kₖ &= Pₖ⁻ H^T (H Pₖ⁻ H^T + R)^{-1} \\
-x̂ₖ &= x̂ₖ⁻ + Kₖ (zₖ - H x̂ₖ⁻) \\
-Pₖ &= (I - Kₖ H) Pₖ⁻
-\end{aligned}
 
 
 \[Guess: 50%, Var: 1.5\] + \[Shaky Reading: 49%\] --> \[Kalman Gain: 0.6\] --> \[New Guess: 49.4%, Var: 0.6\] (Smoother, More Sure)
+
+
+
 
 *   **Simple**: “Here’s a new shaky reading (say 49%). I’ll mix it with my guess to get a better one, trusting the reading more if my guess is wobbly.”
     
@@ -114,7 +109,43 @@ Pₖ &= (I - Kₖ H) Pₖ⁻
     *   **Reliability**: By filtering noise, it prevents bad decisions (e.g., overcharging) that could harm the battery or satellite.
         
 
+Role in the BMS Project
+-----------------------
 
+### Where It’s Used
+
+*   **In main.c**:
+    
+    *   Two Kalman Filters (soc\_kf and soh\_kf) are initialized in main() with starting guesses (e.g., 50% SOC, 100% SOH).
+        
+    *   Update\_SOC\_SOH calls KalmanFilter\_Update with coulomb counting data to refine SOC and SOH every loop (100 ms).
+        
+
+### Example in Action
+
+*   **Simple**: Suppose our sensor says the battery’s at 48%, but it’s shaky. The filter might guess 49% last time. It mixes them and says, “I think it’s 48.6%,” smoothing out the wobble.
+    
+*   **Tech**:
+    
+    *   Input: measurement = 48%, state = 49%, variance = 1, process\_noise = 0.01, measurement\_noise = 1.
+        
+    *   Prediction: variance = 1.01.
+        
+    *   Update: kalman\_gain = 1.01 / (1.01 + 1) ≈ 0.5, state = 49 + 0.5 \* (48 - 49) = 48.5, variance = 1.01 \* (1 - 0.5) ≈ 0.505.
+        
+
+Why It’s Important
+------------------
+
+*   **Simple**: Space is tricky—sensors get noisy, and we can’t fix things up there. This filter keeps our battery guesses spot-on so the satellite stays powered and safe.
+    
+*   **Technical**:
+    
+    *   **Noise Reduction**: Cleans up BQ76920 data for reliable SOC/SOH.
+        
+    *   **Battery Management**: Prevents overcharging (SOC too high) or deep discharge (SOC too low), critical for lithium-ion batteries.
+        
+    *   **Mission Success**: Accurate SOH helps predict battery life, ensuring the satellite lasts its whole mission.
 
 
 
