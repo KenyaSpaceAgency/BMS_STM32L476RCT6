@@ -51,7 +51,12 @@ Imagine a timeline with two repeating steps:
 +-------------+  |
 | Prediction  |--+
 +-------------+
+
+
 ```
+
+
+
 #### 1\. Prediction Step
 
 ### Key Symbols
