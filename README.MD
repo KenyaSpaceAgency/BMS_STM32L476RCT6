@@ -1,4 +1,4 @@
-Below is a consolidated and polished version of your project documentation for the BMS (Battery Management System) project based on the STM32L476RCT6 microcontroller, incorporating all your notes and additional details from our discussions. This documentation is structured for clarity and completeness, suitable for use in STM32CubeIDE or as a project reference.
+Below is a consolidated and polished version for the BMS (Battery Management System) project based on the STM32L476RCT6 microcontroller, incorporating all your notes and additional details from our discussions. This documentation is structured for clarity and completeness, suitable for use in STM32CubeIDE or as a project reference.
 
 
 ---
