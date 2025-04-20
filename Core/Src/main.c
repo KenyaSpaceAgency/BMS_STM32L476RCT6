@@ -24,7 +24,7 @@
 #include "kalman_filter.h"
 #include "ssp.h"
 #include "adc.h"
-#include "crc32.h"
+#include "crc16.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdarg.h> // For va_list in Log_Error
@@ -115,16 +115,16 @@ static uint32_t last_blink_toggle = 0;
 
 // Battery configuration
 BatteryConfig battery_config = {
-    .nominal_capacity = 2000.0f,      // Default: 2000 mAh
-    .ov_threshold = 4200,             // Default: 4.2V per cell (in mV)
-    .uv_threshold = 2800,             // Default: 2.8V per cell (in mV)
-    .occ_threshold = 5000,            // Default: 5000 mA (charging)
-    .ocd_threshold = 5000,            // Default: 5000 mA (discharging)
-    .overtemp_threshold = 60,         // Default: 60°C
-    .undertemp_threshold = -20,       // Default: -20°C
-    .soc_low_threshold = 20.0f,       // Default: 20%
-    .max_charge_time = 3600,          // Default: 3600 seconds
-    .cv_threshold = 4200              // Default: 4200 mV
+    .nominal_capacity = 4000.0f,      // 4S2P: 2 cells in parallel, 2000 mAh each
+    .ov_threshold = 4200,             // 4.2V per cell (in mV)
+    .uv_threshold = 2800,             // 2.8V per cell (in mV)
+    .occ_threshold = 5000,            // 5000 mA (charging)
+    .ocd_threshold = 5000,            // 5000 mA (discharging)
+    .overtemp_threshold = 60,         // 60°C
+    .undertemp_threshold = -20,       // -20°C
+    .soc_low_threshold = 20.0f,       // 20%
+    .max_charge_time = 3600,          // 3600 seconds
+    .cv_threshold = 4200              // 4200 mV
 };
 
 // Firmware update variables
@@ -220,6 +220,7 @@ void Log_Error(const char *format, ...)
     HAL_FLASH_Program(FLASH_TYPEPROGRAM_DOUBLEWORD, NEXT_SLOT_ADDR, next_slot);
     HAL_FLASH_Lock();
 }
+
 /**
   * @brief  Reads and sends all logs over RS485
   * @retval None
@@ -276,22 +277,21 @@ void Update_SOC_SOH(void)
 /**
   * @brief  Updates the BMS operation mode and charge/discharge status
   * @retval None
+  * @note   Checks all 4 cells (Cells 1, 2, 3, 4) for overvoltage and undervoltage recovery
   */
 void Update_BMS_Mode(void)
 {
     static uint32_t fault_start_time = 0;
     static uint8_t in_fault_mode = 0;
-    static uint8_t recovery_attempts = 0; // Counter for recovery attempts (e.g., for DEVICE_XREADY)
-    static const uint8_t MAX_RECOVERY_ATTEMPTS = 3; // Maximum number of recovery attempts before reset
-    static const uint32_t FAULT_TIMEOUT = 30000; // 30 seconds timeout for most faults
-    static const uint32_t TEMP_FAULT_TIMEOUT = 60000; // 60 seconds timeout for temperature faults
-    static const uint32_t COOLDOWN_PERIOD = 10000; // 10 seconds cooldown for overcurrent faults
-    static const uint32_t RECOVERY_DELAY = 5000; // 5 seconds delay before recovery attempt
+    static uint8_t recovery_attempts = 0;
+    static const uint8_t MAX_RECOVERY_ATTEMPTS = 3;
+    static const uint32_t FAULT_TIMEOUT = 30000;
+    static const uint32_t TEMP_FAULT_TIMEOUT = 60000;
+    static const uint32_t COOLDOWN_PERIOD = 10000;
+    static const uint32_t RECOVERY_DELAY = 5000;
 
-    // Check for faults
     if (error_flags & (ERROR_OVERVOLTAGE | ERROR_UNDERVOLTAGE | ERROR_OCC | ERROR_OCD | ERROR_SCD | ERROR_OVERTEMP | ERROR_UNDERTEMP | ERROR_DISCREPANCY | ERROR_DEVICE_XREADY | ERROR_OVRD_ALERT))
     {
-        // If not already in fault mode, record the start time
         if (!in_fault_mode)
         {
             fault_start_time = HAL_GetTick();
@@ -300,14 +300,12 @@ void Update_BMS_Mode(void)
 
         bms_mode = MODE_FAULT;
 
-        // Protective actions and recovery logic based on specific faults
         if (error_flags & ERROR_OVERVOLTAGE)
         {
-            charge_enabled = 0; // Disable charging to prevent further voltage increase
-            discharge_enabled = 1; // Allow discharging to reduce voltage
+            charge_enabled = 0;
+            discharge_enabled = 1;
             Log_Error("Protective action: Disabled charging due to overvoltage");
 
-            // Recovery: Check if all cell voltages are below the threshold
             uint8_t all_below_threshold = 1;
             for (uint8_t i = 0; i < NUM_GROUPS_PER_IC; i++)
             {
@@ -331,11 +329,10 @@ void Update_BMS_Mode(void)
         }
         else if (error_flags & ERROR_UNDERVOLTAGE)
         {
-            charge_enabled = 1; // Allow charging to recover battery
-            discharge_enabled = 0; // Disable discharging to prevent deep discharge
+            charge_enabled = 1;
+            discharge_enabled = 0;
             Log_Error("Protective action: Disabled discharging due to undervoltage");
 
-            // Recovery: Check if all cell voltages are above the threshold
             uint8_t all_above_threshold = 1;
             for (uint8_t i = 0; i < NUM_GROUPS_PER_IC; i++)
             {
@@ -359,15 +356,14 @@ void Update_BMS_Mode(void)
         }
         else if (error_flags & ERROR_OCC)
         {
-            charge_enabled = 0; // Disable charging to prevent damage
-            discharge_enabled = 1; // Allow discharging
+            charge_enabled = 0;
+            discharge_enabled = 1;
             Log_Error("Protective action: Disabled charging due to overcurrent charge");
 
-            // Recovery: Wait for a cooldown period and check current
             if (HAL_GetTick() - fault_start_time >= COOLDOWN_PERIOD)
             {
                 int16_t total_current = (pack_current_1 + pack_current_2) / 2;
-                if (total_current >= 0) // Ensure no charging current
+                if (total_current >= 0)
                 {
                     Log_Error("Overcurrent charge fault cleared");
                     error_flags &= ~ERROR_OCC;
@@ -382,15 +378,14 @@ void Update_BMS_Mode(void)
         }
         else if (error_flags & ERROR_OCD)
         {
-            charge_enabled = 1; // Allow charging
-            discharge_enabled = 0; // Disable discharging to prevent damage
+            charge_enabled = 1;
+            discharge_enabled = 0;
             Log_Error("Protective action: Disabled discharging due to overcurrent discharge");
 
-            // Recovery: Wait for a cooldown period and check current
             if (HAL_GetTick() - fault_start_time >= COOLDOWN_PERIOD)
             {
                 int16_t total_current = (pack_current_1 + pack_current_2) / 2;
-                if (total_current <= 0) // Ensure no discharging current
+                if (total_current <= 0)
                 {
                     Log_Error("Overcurrent discharge fault cleared");
                     error_flags &= ~ERROR_OCD;
@@ -405,11 +400,10 @@ void Update_BMS_Mode(void)
         }
         else if (error_flags & ERROR_SCD)
         {
-            charge_enabled = 0; // Disable both charging and discharging
+            charge_enabled = 0;
             discharge_enabled = 0;
             Log_Error("Protective action: Disabled charging and discharging due to short-circuit discharge");
 
-            // Recovery: Wait and check if the fault clears in SYS_STAT
             if (HAL_GetTick() - fault_start_time >= FAULT_TIMEOUT)
             {
                 uint8_t status1, status2;
@@ -437,11 +431,10 @@ void Update_BMS_Mode(void)
         }
         else if (error_flags & ERROR_OVERTEMP)
         {
-            charge_enabled = 0; // Disable both charging and discharging
+            charge_enabled = 0;
             discharge_enabled = 0;
             Log_Error("Protective action: Disabled charging and discharging due to overtemperature");
 
-            // Recovery: Check if temperatures are below a safe threshold
             if (temperature_1 < (battery_config.overtemp_threshold - 10) && temperature_2 < (battery_config.overtemp_threshold - 10) && pcb_temperature < (battery_config.overtemp_threshold - 10))
             {
                 Log_Error("Overtemperature fault cleared");
@@ -456,11 +449,10 @@ void Update_BMS_Mode(void)
         }
         else if (error_flags & ERROR_UNDERTEMP)
         {
-            charge_enabled = 0; // Disable charging to prevent lithium plating
-            discharge_enabled = 1; // Allow discharging if safe
+            charge_enabled = 0;
+            discharge_enabled = 1;
             Log_Error("Protective action: Disabled charging due to undertemperature");
 
-            // Recovery: Check if temperatures are above a safe threshold
             if (temperature_1 > (battery_config.undertemp_threshold + 10) && temperature_2 > (battery_config.undertemp_threshold + 10))
             {
                 Log_Error("Undertemperature fault cleared");
@@ -475,11 +467,10 @@ void Update_BMS_Mode(void)
         }
         else if (error_flags & ERROR_DISCREPANCY)
         {
-            charge_enabled = 0; // Disable both charging and discharging
+            charge_enabled = 0;
             discharge_enabled = 0;
             Log_Error("Protective action: Disabled charging and discharging due to redundancy discrepancy");
 
-            // Recovery: Attempt to reinitialize BQ76920 ICs
             if (HAL_GetTick() - fault_start_time >= RECOVERY_DELAY)
             {
                 Log_Error("Attempting to reinitialize BQ76920 ICs to resolve discrepancy");
@@ -492,7 +483,6 @@ void Update_BMS_Mode(void)
                     Log_Error("Failed to reinitialize BQ76920 (I2C2)");
                 }
 
-                // Recheck redundancy
                 uint8_t discrepancy_flag = 0;
                 BQ76920_CheckRedundancy(group_voltages_1, group_voltages_2, pack_current_1, pack_current_2, &discrepancy_flag);
                 if (!discrepancy_flag)
@@ -510,11 +500,10 @@ void Update_BMS_Mode(void)
         }
         else if (error_flags & ERROR_DEVICE_XREADY)
         {
-            charge_enabled = 0; // Disable both charging and discharging
+            charge_enabled = 0;
             discharge_enabled = 0;
             Log_Error("Protective action: Disabled charging and discharging due to DEVICE_XREADY");
 
-            // Recovery: Attempt to reinitialize BQ76920 ICs after a delay
             if (HAL_GetTick() - fault_start_time >= RECOVERY_DELAY)
             {
                 recovery_attempts++;
@@ -536,7 +525,7 @@ void Update_BMS_Mode(void)
                     Log_Error("DEVICE_XREADY fault cleared");
                     error_flags &= ~ERROR_DEVICE_XREADY;
                     in_fault_mode = 0;
-                    recovery_attempts = 0; // Reset the counter
+                    recovery_attempts = 0;
                 }
                 else if (recovery_attempts >= MAX_RECOVERY_ATTEMPTS)
                 {
@@ -547,11 +536,10 @@ void Update_BMS_Mode(void)
         }
         else if (error_flags & ERROR_OVRD_ALERT)
         {
-            charge_enabled = 0; // Disable both charging and discharging as a precaution
+            charge_enabled = 0;
             discharge_enabled = 0;
             Log_Error("Protective action: Disabled charging and discharging due to OVRD_ALERT");
 
-            // Recovery: Wait and check if the fault clears in SYS_STAT
             if (HAL_GetTick() - fault_start_time >= COOLDOWN_PERIOD)
             {
                 uint8_t status1, status2;
@@ -578,42 +566,37 @@ void Update_BMS_Mode(void)
             }
         }
 
-        // Update BQ76920 charge/discharge settings
         BQ76920_SetChargeEnable(&hi2c1, charge_enabled, discharge_enabled);
         BQ76920_SetChargeEnable(&hi2c2, charge_enabled, discharge_enabled);
         return;
     }
 
-    // If no faults, clear fault mode flag and recovery attempts
     in_fault_mode = 0;
     recovery_attempts = 0;
 
-    // Check if the battery is too low and needs to charge right away
     charge_immediately = (soc < battery_config.soc_low_threshold) ? 1 : 0;
 
-    // Look at the current to decide what to do
     int16_t total_current = (pack_current_1 + pack_current_2) / 2;
-    if (total_current < 0) { // Charging (negative current)
+    if (total_current < 0) {
         bms_mode = MODE_CHARGING;
         charge_enabled = 1;
         discharge_enabled = 0;
-    } else if (total_current > 0) { // Discharging (positive current)
+    } else if (total_current > 0) {
         bms_mode = MODE_DISCHARGING;
         charge_enabled = 0;
         discharge_enabled = 1;
-    } else { // Idle (no current)
-        if (soc < battery_config.soc_low_threshold) { // Start charging if SOC is low
+    } else {
+        if (soc < battery_config.soc_low_threshold) {
             bms_mode = MODE_CHARGING;
             charge_enabled = 1;
             discharge_enabled = 0;
-        } else { // Go to sleep to save power
+        } else {
             bms_mode = MODE_SLEEP;
             charge_enabled = 0;
             discharge_enabled = 0;
         }
     }
 
-    // Update BQ76920 charge/discharge settings
     BQ76920_SetChargeEnable(&hi2c1, charge_enabled, discharge_enabled);
     BQ76920_SetChargeEnable(&hi2c2, charge_enabled, discharge_enabled);
 }
@@ -643,11 +626,7 @@ void SSP_SendStatus(void)
     SSP_FrameTypeDef frame = {0};
     uint16_t frame_len;
 
-    uint32_t pack_voltage = group_voltages_1[0] + group_voltages_1[1] + group_voltages_1[2];
-
-    telemetry.mode = bms_mode;
-    telemetry.charge_enabled = charge_enabled;
-    telemetry.discharge_enabled = discharge_enabled;
+    uint32_t pack_voltage = group_voltages_1[0] + group_voltages_1[1] + group_voltages_1[2] + group_voltages_1[3];
     telemetry.charge_immediately = charge_immediately;
     telemetry.bms_online = bms_online;
     telemetry.error_flags = error_flags;
@@ -851,7 +830,8 @@ void SSP_ProcessReceivedFrame(SSP_FrameTypeDef *frame)
 
 /**
   * @brief  Implements the CC-CV charging algorithm
-  * @retval None
+  * @retval HAL_StatusTypeDef
+  * @note   Checks all 4 cells (Cells 1, 2, 3, 4) for maximum voltage
   */
 HAL_StatusTypeDef ChargeBattery(void)
 {
@@ -862,10 +842,9 @@ HAL_StatusTypeDef ChargeBattery(void)
     status = Temperature_Read(&hi2c1, &hi2c2, &temperature_1, &temperature_2);
     if (status != HAL_OK || temperature_1 == INT16_MIN || temperature_2 == INT16_MIN)
     {
-        // Handle I2C read error or sensor failure
         HAL_GPIO_WritePin(GPIOE, GPIO_PIN_11, GPIO_PIN_RESET); // Disable EPS power (EPS_EN)
-        in_cv_mode = 0; // Reset CV mode on error
-        charge_start_time = 0; // Reset charge start time
+        in_cv_mode = 0;
+        charge_start_time = 0;
         return HAL_ERROR;
     }
 
@@ -875,10 +854,9 @@ HAL_StatusTypeDef ChargeBattery(void)
     // Check for over-temperature condition
     if (highest_temp > battery_config.overtemp_threshold || pcb_temperature > battery_config.overtemp_threshold)
     {
-        // Over-temperature detected, disable charging
-        HAL_GPIO_WritePin(GPIOE, GPIO_PIN_11, GPIO_PIN_RESET); // Disable EPS power (EPS_EN)
-        in_cv_mode = 0; // Reset CV mode on error
-        charge_start_time = 0; // Reset charge start time
+        HAL_GPIO_WritePin(GPIOE, GPIO_PIN_11, GPIO_PIN_RESET);
+        in_cv_mode = 0;
+        charge_start_time = 0;
         return HAL_ERROR;
     }
 
@@ -886,10 +864,9 @@ HAL_StatusTypeDef ChargeBattery(void)
     if (!in_cv_mode)
     {
         // Constant Current (CC) mode
-        // (Add your CC charging logic here, e.g., set charging current)
         if (charge_start_time == 0)
         {
-            charge_start_time = HAL_GetTick(); // Record start time
+            charge_start_time = HAL_GetTick();
         }
 
         // Check if we should switch to CV mode (based on voltage)
@@ -901,19 +878,18 @@ HAL_StatusTypeDef ChargeBattery(void)
         }
         if (max_voltage > battery_config.cv_threshold)
         {
-            in_cv_mode = 1; // Switch to CV mode
+            in_cv_mode = 1;
         }
     }
     else
     {
         // Constant Voltage (CV) mode
-        // (Add your CV charging logic here, e.g., maintain constant voltage)
-        uint32_t charge_duration = (HAL_GetTick() - charge_start_time) / 1000; // Duration in seconds
+        uint32_t charge_duration = (HAL_GetTick() - charge_start_time) / 1000;
         if (charge_duration > battery_config.max_charge_time)
         {
-            HAL_GPIO_WritePin(GPIOE, GPIO_PIN_11, GPIO_PIN_RESET); // Disable charging
-            in_cv_mode = 0; // Reset CV mode
-            charge_start_time = 0; // Reset charge start time
+            HAL_GPIO_WritePin(GPIOE, GPIO_PIN_11, GPIO_PIN_RESET);
+            in_cv_mode = 0;
+            charge_start_time = 0;
         }
     }
 
@@ -947,24 +923,22 @@ void Bootloader_Check(void)
     }
 }
 
-
-
 /**
   * @brief  Handles the firmware update process over RS485
   * @retval None
   */
-void Bootloader_FirmwareUpdate(void) {
+void Bootloader_FirmwareUpdate(void)
+{
     SSP_FrameTypeDef received_frame = {0};
     uint32_t last_packet_time = HAL_GetTick();
     uint32_t current_address = APP_START_ADDR;
     uint32_t total_bytes_received = 0;
     uint32_t expected_firmware_size = 0;
     uint8_t firmware_buffer[FIRMWARE_UPDATE_PACKET_SIZE];
-    uint32_t calculated_crc = 0xFFFFFFFF; // Initialize for CRC32
+    uint16_t calculated_crc = 0xFFFF;
 
     Log_Error("Waiting for firmware update packets...");
 
-    // Erase the application flash region
     HAL_FLASH_Unlock();
     for (uint32_t addr = APP_START_ADDR; addr < APP_END_ADDR; addr += FLASH_PAGE_SIZE) {
         Flash_Erase((addr - FLASH_BASE) / FLASH_PAGE_SIZE);
@@ -996,7 +970,7 @@ void Bootloader_FirmwareUpdate(void) {
 
             switch (received_frame.cmd_id & 0x3F) {
                 case SSP_CMD_FIRMWARE_UPDATE:
-                    if (received_frame.data_len < 4) {
+                    if (received_frame.data_len < 4 && total_bytes_received == 0) {
                         response.cmd_id = SSP_CMD_NACK | SSP_FRAME_TYPE_REPLY;
                         break;
                     }
@@ -1023,8 +997,7 @@ void Bootloader_FirmwareUpdate(void) {
                         }
                         HAL_FLASH_Lock();
 
-                        // Update CRC32 incrementally
-                        calculated_crc = CalculateCRC32(firmware_buffer, received_frame.data_len);
+                        calculated_crc = CalculateCRC16(firmware_buffer, received_frame.data_len);
 
                         total_bytes_received += received_frame.data_len;
                         current_address += received_frame.data_len;
@@ -1033,19 +1006,19 @@ void Bootloader_FirmwareUpdate(void) {
                         response.cmd_id = SSP_CMD_ACK | SSP_FRAME_TYPE_REPLY;
 
                         if (total_bytes_received >= expected_firmware_size) {
-                            uint32_t received_crc = (firmware_buffer[received_frame.data_len - 4] << 24) |
-                                                    (firmware_buffer[received_frame.data_len - 3] << 16) |
-                                                    (firmware_buffer[received_frame.data_len - 2] << 8) |
-                                                    (firmware_buffer[received_frame.data_len - 1]);
+                            uint16_t received_crc = (firmware_buffer[received_frame.data_len - 2] << 8) |
+                                                    firmware_buffer[received_frame.data_len - 1];
                             if (calculated_crc == received_crc) {
                                 HAL_FLASH_Unlock();
                                 HAL_FLASH_Program(FLASH_TYPEPROGRAM_DOUBLEWORD, APP_VALIDITY_FLAG_ADDR, 0xA5A5A5A5);
+                                uint64_t crc_data = calculated_crc;
+                                HAL_FLASH_Program(FLASH_TYPEPROGRAM_DOUBLEWORD, APP_END_ADDR - 8, crc_data);
                                 HAL_FLASH_Lock();
                                 Log_Error("Firmware update completed successfully, rebooting...");
                                 HAL_Delay(100);
                                 HAL_NVIC_SystemReset();
                             } else {
-                                Log_Error("Firmware CRC32 mismatch, rebooting without setting validity flag...");
+                                Log_Error("Firmware CRC16 mismatch, rebooting without setting validity flag...");
                                 HAL_Delay(100);
                                 HAL_NVIC_SystemReset();
                             }
@@ -1071,13 +1044,15 @@ void Bootloader_FirmwareUpdate(void) {
   * @brief  Jumps to the application code
   * @retval None
   */
-static uint8_t IsApplicationValid(uint32_t start_addr) {
-    uint32_t crc = CalculateCRC32((uint8_t *)start_addr, APP_END_ADDR - start_addr - 4);
-    uint32_t stored_crc = *(uint32_t *)(APP_END_ADDR - 4);
+static uint8_t IsApplicationValid(uint32_t start_addr)
+{
+    uint16_t crc = CalculateCRC16((uint8_t *)start_addr, APP_END_ADDR - start_addr - 8);
+    uint16_t stored_crc = *(uint16_t *)(APP_END_ADDR - 8);
     return (crc == stored_crc) && (*(uint32_t *)APP_VALIDITY_FLAG_ADDR == 0xA5A5A5A5);
 }
 
-void JumpToApplication(void) {
+void JumpToApplication(void)
+{
     if (IsApplicationValid(APP_START_ADDR)) {
         uint32_t app_jump_address = *(volatile uint32_t *)(APP_START_ADDR + 4);
         void (*app_reset_handler)(void) = (void (*)(void))app_jump_address;
@@ -1334,7 +1309,7 @@ int main(void)
         for (uint8_t i = 0; i < NUM_GROUPS_PER_IC; i++)
         {
             char group_data[20];
-            snprintf(group_data, sizeof(group_data), "Group%d: %dmV ", i + 1, group_voltages_1[i]);
+            snprintf(group_data, sizeof(group_data), "Cell%d: %dmV ", i + 1, group_voltages_1[i]);
             strncat(message, group_data, MESSAGE_SIZE - strlen(message) - 1);
         }
         char temp_data[88];
@@ -1594,20 +1569,6 @@ static void MX_RTC_Init(void)
   * @param None
   * @retval None
   */
-
-//void HAL_TIM_MspPostInit(TIM_HandleTypeDef *htim) {
-//    GPIO_InitTypeDef GPIO_InitStruct = {0};
-//    if (htim->Instance == TIM4) {
-//        __HAL_RCC_GPIOB_CLK_ENABLE();
-//        GPIO_InitStruct.Pin = GPIO_PIN_8 | GPIO_PIN_9; // Adjust pins for TIM4 CH3 and CH4
-//        GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
-//        GPIO_InitStruct.Pull = GPIO_NOPULL;
-//        GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-//        GPIO_InitStruct.Alternate = GPIO_AF2_TIM4;
-//        HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-//    }
-//}
-
 static void MX_TIM4_Init(void)
 {
     TIM_MasterConfigTypeDef sMasterConfig = {0};
@@ -1643,8 +1604,7 @@ static void MX_TIM4_Init(void)
     }
     /* USER CODE BEGIN TIM4_Init 2 */
     HAL_TIM_PWM_MspInit(&htim4);
-
-        /* USER CODE END TIM4_Init 2 */
+    /* USER CODE END TIM4_Init 2 */
 }
 
 /**
@@ -1746,7 +1706,6 @@ static void MX_GPIO_Init(void)
     GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
     GPIO_InitStruct.Pull = GPIO_PULLUP; // Use pull-up for open-drain alert signal
     HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-
 
     /*Configure GPIO pin : PA12 for ALERT2 input (second BQ76920) */
     GPIO_InitStruct.Pin = GPIO_PIN_12;

@@ -46,7 +46,7 @@ void SSP_PackTelemetry(SSP_TelemetryTypeDef *telemetry, SSP_FrameTypeDef *frame)
     frame->dest = SSP_ADDR_OBC;
     frame->src = SSP_ADDR_EPS;
     frame->cmd_id = SSP_CMD_GOSTM | SSP_FRAME_TYPE_REPLY; // Reply frame
-    frame->data_len = 41; // Total size of telemetry data
+    frame->data_len = 43; // Total size of telemetry data
 
     uint8_t *data = frame->data;
     uint8_t index = 0;
@@ -76,7 +76,7 @@ void SSP_PackTelemetry(SSP_TelemetryTypeDef *telemetry, SSP_FrameTypeDef *frame)
     data[index++] = telemetry->temp_2 & 0xFF;
     data[index++] = (telemetry->pcb_temp >> 8) & 0xFF;
     data[index++] = telemetry->pcb_temp & 0xFF;
-    for (uint8_t i = 0; i < 3; i++) {
+    for (uint8_t i = 0; i < NUM_GROUPS_PER_IC; i++) {
         data[index++] = (telemetry->group_voltages[i] >> 8) & 0xFF;
         data[index++] = telemetry->group_voltages[i] & 0xFF;
     }
@@ -135,7 +135,7 @@ void SSP_UnpackTelemetry(SSP_FrameTypeDef *frame, SSP_TelemetryTypeDef *telemetr
     index += 2;
     telemetry->pcb_temp = (int16_t)((data[index] << 8) | data[index + 1]);
     index += 2;
-    for (uint8_t i = 0; i < 3; i++) {
+    for (uint8_t i = 0; i < NUM_GROUPS_PER_IC; i++) {
         telemetry->group_voltages[i] = (data[index] << 8) | data[index + 1];
         index += 2;
     }

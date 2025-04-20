@@ -7,7 +7,7 @@
 "./Core/Src/syscalls.o"
 "./Core/Src/sysmem.o"
 "./Core/Src/system_stm32l4xx.o"
-"./Core/Src/crc32/crc32.o"
+"./Core/Src/crc32/crc16.o"
 "./Core/Src/kalman filter/kalman_filter.o"
 "./Core/Src/pid/pid.o"
 "./Core/Src/ssp/ssp.o"

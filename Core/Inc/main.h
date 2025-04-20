@@ -48,25 +48,28 @@ extern ADC_HandleTypeDef hadc1; // Add this line
 /* Exported types ------------------------------------------------------------*/
 /* USER CODE BEGIN ET */
 typedef enum {
-    MODE_CHARGING,
+    MODE_CHARGING = 0,
     MODE_DISCHARGING,
     MODE_FAULT,
     MODE_SLEEP
 } BMS_ModeTypeDef;
 
-// Battery pack configuration structure
 typedef struct {
-    float nominal_capacity;        // Battery capacity in mAh
-    uint16_t ov_threshold;        // Overvoltage threshold in mV
-    uint16_t uv_threshold;        // Undervoltage threshold in mV
-    int16_t occ_threshold;        // Overcurrent charge threshold in mA
-    int16_t ocd_threshold;        // Overcurrent discharge threshold in mA
-    int16_t overtemp_threshold;   // Overtemperature threshold in °C
-    int16_t undertemp_threshold;  // Undertemperature threshold in °C
-    float soc_low_threshold;      // SOC low threshold in percentage
-    uint32_t max_charge_time;     // Maximum charge time in seconds
-    uint16_t cv_threshold;        // Constant voltage threshold in mV
+    float nominal_capacity;
+    uint16_t ov_threshold;
+    uint16_t uv_threshold;
+    uint16_t occ_threshold;
+    uint16_t ocd_threshold;
+    int16_t overtemp_threshold;
+    int16_t undertemp_threshold;
+    float soc_low_threshold;
+    uint32_t max_charge_time;
+    uint16_t cv_threshold;
 } BatteryConfig;
+
+extern BatteryConfig battery_config;
+
+#define NUM_GROUPS_PER_IC 4
 /* USER CODE END ET */
 
 /* Exported constants --------------------------------------------------------*/
@@ -88,7 +91,6 @@ typedef struct {
 #define FLASH_LOG_PAGE 128
 
 #define LOOP_TIME 0.1f // Loop time in seconds (100 ms)
-#define NUM_GROUPS_PER_IC 3 // Define here for consistency across files
 
 // Flash memory layout
 //#define FLASH_PAGE_SIZE 2048 // 2 KB pages for STM32L476RCT6
@@ -117,7 +119,7 @@ void Error_Handler(void);
 
 /* USER CODE BEGIN EFP */
 void Log_Error(const char *format, ...);
-extern BatteryConfig battery_config;
+
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/

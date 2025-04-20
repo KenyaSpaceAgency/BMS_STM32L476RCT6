@@ -1,0 +1,103 @@
+!SESSION 2025-04-20 09:29:39.804 -----------------------------------------------
+eclipse.buildId=Version 1.18.0
+java.version=21.0.3
+java.vendor=Eclipse Adoptium
+BootLoader constants: OS=win32, ARCH=x86_64, WS=win32, NL=en_GB
+Framework arguments:  C:\Users\yomue\CLionProjects\BMS_STM32L476RCT6\.project
+Command-line arguments:  -os win32 -ws win32 -arch x86_64 C:\Users\yomue\CLionProjects\BMS_STM32L476RCT6\.project
+
+!ENTRY com.st.stm32cube.ide.mcu.informationcenter 4 4 2025-04-20 09:29:47.840
+!MESSAGE CubeMX plugin appears to be active, Log4j initialization might be too late.
+
+!ENTRY com.st.stm32cube.ide.mcu.informationcenter 1 1 2025-04-20 09:29:47.841
+!MESSAGE Log4j2 initialized with config file C:\Users\yomue\CLionProjects\BMS_STM32L476RCT6\.metadata\.log4j2.xml
+
+!ENTRY org.eclipse.egit.ui 2 0 2025-04-20 09:29:48.730
+!MESSAGE Warning: The environment variable HOME is not set. The following directory will be used to store the Git
+user global configuration and to define the default location to store repositories: 'C:\Users\yomue'. If this is
+not correct please set the HOME environment variable and restart Eclipse. Otherwise Git for Windows and
+EGit might behave differently since they see different configuration options.
+This warning can be switched off on the Team > Git > Confirmations and Warnings preference page.
+
+!ENTRY com.st.stm32cube.ide.mcu.ide 1 1 2025-04-20 09:29:50.295
+!MESSAGE Started RMI Server, listening on port 41337
+
+!ENTRY com.microsoft.copilot.eclipse 1 0 2025-04-20 09:30:05.510
+!MESSAGE [Info] Starting language server with binary lsp agent.
+
+!ENTRY com.microsoft.copilot.eclipse 1 0 2025-04-20 09:30:05.518
+!MESSAGE [Info] Lsp agent started successfully.
+
+!ENTRY com.microsoft.copilot.eclipse 1 0 2025-04-20 09:30:05.535
+!MESSAGE [Info] No proxy data found
+
+!ENTRY org.eclipse.core.jobs 4 2 2025-04-20 09:30:06.335
+!MESSAGE An internal error occurred during: "Copilot initialization".
+!STACK 0
+org.eclipse.core.runtime.AssertionFailedException: assertion failed: This operation must be run within the observable's realm
+	at org.eclipse.core.runtime.Assert.isTrue(Assert.java:119)
+	at org.eclipse.core.databinding.observable.AbstractObservable.checkRealm(AbstractObservable.java:108)
+	at org.eclipse.core.databinding.observable.value.AbstractObservableValue.setValue(AbstractObservableValue.java:69)
+	at com.microsoft.copilot.eclipse.ui.chat.services.CopilotModelService.lambda$2(CopilotModelService.java:152)
+	at org.eclipse.core.databinding.observable.Realm.runWithDefault(Realm.java:339)
+	at com.microsoft.copilot.eclipse.ui.chat.services.ChatBaseService.lambda$0(ChatBaseService.java:32)
+	at com.microsoft.copilot.eclipse.ui.utils.SwtUtils.invokeOnDisplayThread(SwtUtils.java:55)
+	at com.microsoft.copilot.eclipse.ui.chat.services.ChatBaseService.ensureRealm(ChatBaseService.java:30)
+	at com.microsoft.copilot.eclipse.ui.chat.services.CopilotModelService.syncModels(CopilotModelService.java:151)
+	at com.microsoft.copilot.eclipse.ui.chat.services.CopilotModelService.<init>(CopilotModelService.java:65)
+	at com.microsoft.copilot.eclipse.ui.chat.services.ChatServiceManager.<init>(ChatServiceManager.java:27)
+	at com.microsoft.copilot.eclipse.ui.CopilotUi$1.run(CopilotUi.java:78)
+	at org.eclipse.core.internal.jobs.Worker.run(Worker.java:63)
+
+!ENTRY org.eclipse.lsp4e 1 0 2025-04-20 09:30:06.394
+!MESSAGE [Info]	[lsp] GitHub Copilot Language Server 1.290.0 initialized
+
+!ENTRY com.microsoft.copilot.eclipse.ui 4 0 2025-04-20 09:30:06.574
+!MESSAGE FrameworkEvent ERROR
+!STACK 0
+org.osgi.framework.BundleException: Exception in com.microsoft.copilot.eclipse.ui.CopilotUi.stop() of bundle com.microsoft.copilot.eclipse.ui.
+	at org.eclipse.osgi.internal.framework.BundleContextImpl.stop(BundleContextImpl.java:923)
+	at org.eclipse.osgi.internal.framework.EquinoxBundle.stopWorker0(EquinoxBundle.java:1071)
+	at org.eclipse.osgi.internal.framework.EquinoxBundle$EquinoxModule.stopWorker(EquinoxBundle.java:392)
+	at org.eclipse.osgi.container.Module.doStop(Module.java:695)
+	at org.eclipse.osgi.container.Module.stop(Module.java:554)
+	at org.eclipse.osgi.container.ModuleContainer$ContainerStartLevel.decStartLevel(ModuleContainer.java:2116)
+	at org.eclipse.osgi.container.ModuleContainer$ContainerStartLevel.doContainerStartLevel(ModuleContainer.java:1986)
+	at org.eclipse.osgi.container.SystemModule.stopWorker(SystemModule.java:281)
+	at org.eclipse.osgi.internal.framework.EquinoxBundle$SystemBundle$EquinoxSystemModule.stopWorker(EquinoxBundle.java:222)
+	at org.eclipse.osgi.container.Module.doStop(Module.java:695)
+	at org.eclipse.osgi.container.Module.stop(Module.java:554)
+	at org.eclipse.osgi.container.SystemModule.stop(SystemModule.java:212)
+	at org.eclipse.osgi.internal.framework.EquinoxBundle$SystemBundle$EquinoxSystemModule$1.run(EquinoxBundle.java:240)
+	at java.base/java.lang.Thread.run(Thread.java:1583)
+Caused by: java.lang.NullPointerException: Cannot invoke "com.microsoft.copilot.eclipse.core.completion.CompletionStatusListener.onCompletionDone()" because "listener" is null
+	at com.microsoft.copilot.eclipse.core.completion.CompletionProvider.removeCompletionStatusListener(CompletionProvider.java:108)
+	at com.microsoft.copilot.eclipse.ui.CopilotUi.removeCompletionStatusListener(CopilotUi.java:174)
+	at com.microsoft.copilot.eclipse.ui.CopilotUi.stop(CopilotUi.java:120)
+	at org.eclipse.osgi.internal.framework.BundleContextImpl$3.run(BundleContextImpl.java:903)
+	at org.eclipse.osgi.internal.framework.BundleContextImpl$3.run(BundleContextImpl.java:1)
+	at java.base/java.security.AccessController.doPrivileged(AccessController.java:571)
+	at org.eclipse.osgi.internal.framework.BundleContextImpl.stop(BundleContextImpl.java:895)
+	... 13 more
+Root exception:
+java.lang.NullPointerException: Cannot invoke "com.microsoft.copilot.eclipse.core.completion.CompletionStatusListener.onCompletionDone()" because "listener" is null
+	at com.microsoft.copilot.eclipse.core.completion.CompletionProvider.removeCompletionStatusListener(CompletionProvider.java:108)
+	at com.microsoft.copilot.eclipse.ui.CopilotUi.removeCompletionStatusListener(CopilotUi.java:174)
+	at com.microsoft.copilot.eclipse.ui.CopilotUi.stop(CopilotUi.java:120)
+	at org.eclipse.osgi.internal.framework.BundleContextImpl$3.run(BundleContextImpl.java:903)
+	at org.eclipse.osgi.internal.framework.BundleContextImpl$3.run(BundleContextImpl.java:1)
+	at java.base/java.security.AccessController.doPrivileged(AccessController.java:571)
+	at org.eclipse.osgi.internal.framework.BundleContextImpl.stop(BundleContextImpl.java:895)
+	at org.eclipse.osgi.internal.framework.EquinoxBundle.stopWorker0(EquinoxBundle.java:1071)
+	at org.eclipse.osgi.internal.framework.EquinoxBundle$EquinoxModule.stopWorker(EquinoxBundle.java:392)
+	at org.eclipse.osgi.container.Module.doStop(Module.java:695)
+	at org.eclipse.osgi.container.Module.stop(Module.java:554)
+	at org.eclipse.osgi.container.ModuleContainer$ContainerStartLevel.decStartLevel(ModuleContainer.java:2116)
+	at org.eclipse.osgi.container.ModuleContainer$ContainerStartLevel.doContainerStartLevel(ModuleContainer.java:1986)
+	at org.eclipse.osgi.container.SystemModule.stopWorker(SystemModule.java:281)
+	at org.eclipse.osgi.internal.framework.EquinoxBundle$SystemBundle$EquinoxSystemModule.stopWorker(EquinoxBundle.java:222)
+	at org.eclipse.osgi.container.Module.doStop(Module.java:695)
+	at org.eclipse.osgi.container.Module.stop(Module.java:554)
+	at org.eclipse.osgi.container.SystemModule.stop(SystemModule.java:212)
+	at org.eclipse.osgi.internal.framework.EquinoxBundle$SystemBundle$EquinoxSystemModule$1.run(EquinoxBundle.java:240)
+	at java.base/java.lang.Thread.run(Thread.java:1583)

@@ -5,13 +5,13 @@
 
 # Add inputs and outputs from these tool invocations to the build variables 
 C_SRCS += \
-../Core/Src/crc32/crc32.c 
+../Core/Src/crc32/crc16.c 
 
 OBJS += \
-./Core/Src/crc32/crc32.o 
+./Core/Src/crc32/crc16.o 
 
 C_DEPS += \
-./Core/Src/crc32/crc32.d 
+./Core/Src/crc32/crc16.d 
 
 
 # Each subdirectory must supply rules for building sources it contributes
@@ -21,7 +21,7 @@ Core/Src/crc32/%.o Core/Src/crc32/%.su Core/Src/crc32/%.cyclo: ../Core/Src/crc32
 clean: clean-Core-2f-Src-2f-crc32
 
 clean-Core-2f-Src-2f-crc32:
-	-$(RM) ./Core/Src/crc32/crc32.cyclo ./Core/Src/crc32/crc32.d ./Core/Src/crc32/crc32.o ./Core/Src/crc32/crc32.su
+	-$(RM) ./Core/Src/crc32/crc16.cyclo ./Core/Src/crc32/crc16.d ./Core/Src/crc32/crc16.o ./Core/Src/crc32/crc16.su
 
 .PHONY: clean-Core-2f-Src-2f-crc32
 

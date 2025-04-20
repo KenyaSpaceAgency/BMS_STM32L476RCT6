@@ -36,8 +36,8 @@ extern "C" {
 #define SSP_ADDR_BROADCAST 0xFF
 #define SSP_ADDR_MULTICAST 0xFE
 
-#define NUM_GROUPS_PER_IC 3 // Define here
-#define SSP_MAX_DATA_LEN 64 // Define here
+#define NUM_GROUPS_PER_IC 4 // Updated for 4S configuration (4 series groups)
+#define SSP_MAX_DATA_LEN 64 // Maximum data length for SSP frames
 #define SSP_MAX_FRAME_LEN (SSP_MAX_DATA_LEN + 5) // Including header and CRC
 
 #define SSP_FLAG 0x7E
@@ -62,6 +62,10 @@ extern "C" {
 
 #define SSP_CMD_ACK 0x00
 #define SSP_CMD_NACK 0x01
+
+// Note: Telemetry includes 4 group voltages for 4S2P configuration.
+// Pin configuration: VCO=ground, VC1=Cell 2 positive, VC2=Cell 3 positive,
+// VC3=VC4=Cell 3 positive, VC5=Cell 4 positive. Cell 1 voltage is set to 0.
 /* USER CODE END EC */
 
 /* Exported types ------------------------------------------------------------*/
@@ -82,7 +86,7 @@ typedef struct {
     int16_t temp_1;
     int16_t temp_2;
     int16_t pcb_temp;
-    uint16_t group_voltages[NUM_GROUPS_PER_IC];
+    uint16_t group_voltages[NUM_GROUPS_PER_IC]; // Updated to 4 groups for 4S2P
     uint8_t balancing_active;
     uint8_t balancing_mask_1;
     uint8_t balancing_mask_2;
@@ -110,8 +114,6 @@ typedef struct {
     uint16_t crc;
 } SSP_FrameTypeDef;
 /* USER CODE END ET */
-
-
 
 /* Exported macro ------------------------------------------------------------*/
 /* USER CODE BEGIN EM */
