@@ -37,10 +37,10 @@ extern "C" {
 // Safety limits for the batteries (in millivolts)
 #define OV_THRESHOLD        4200  // Too full! (4.2 volts)
 #define UV_THRESHOLD        2800  // Too empty! (2.8 volts)
+// Register definitions (example values, adjust based on datasheet)
+#define PROTECT1_REG 0x04
+#define PROTECT2_REG 0x05
 
-// Note: Pin configuration: VCO=ground, VC1=Cell 2 positive, VC2=Cell 3 positive,
-// VC3=VC4=Cell 3 positive, VC5=Cell 4 positive. Cell 1 is not monitored.
-/* USER CODE END EC */
 
 /* Exported functions prototypes ---------------------------------------------*/
 HAL_StatusTypeDef BQ76920_Init(I2C_HandleTypeDef *hi2c);
@@ -52,7 +52,7 @@ HAL_StatusTypeDef BQ76920_SetChargeEnable(I2C_HandleTypeDef *hi2c, uint8_t charg
 HAL_StatusTypeDef BQ76920_ReadStatus(I2C_HandleTypeDef *hi2c, uint8_t *status);
 void BQ76920_CheckRedundancy(uint16_t *voltages_1, uint16_t *voltages_2, int16_t current_1, int16_t current_2, uint8_t *discrepancy_flag);
 void BQ76920_CheckStatus(I2C_HandleTypeDef *hi2c1, I2C_HandleTypeDef *hi2c2, uint32_t *error_flags);
-
+HAL_StatusTypeDef BQ76920_ConfigureProtection(I2C_HandleTypeDef *hi2c);
 /* USER CODE BEGIN EFP */
 
 /* USER CODE END EFP */

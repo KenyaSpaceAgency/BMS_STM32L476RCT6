@@ -322,5 +322,369 @@ This project implements a Battery Management System (BMS) using the **STM32L476R
 ---
 
 
+The provided code is a comprehensive Battery Management System (BMS) firmware for an STM32 microcontroller, designed to manage a lithium-ion battery pack with redundancy and advanced safety features. Below, I’ll document the reasoning behind the key logic blocks, focusing on their purpose, design decisions, and interactions. The comments aim to clarify the intent and rationale for each section, as requested.
+
+\---
+
+\### 1. \*\*Overall Purpose and System Context\*\*
+
+The firmware controls a BMS for a 4S2P lithium-ion battery pack (4 cells in series, 2 in parallel per group), interfacing with two BQ76920 battery monitoring ICs for redundancy. It manages battery charging, discharging, protection, state-of-charge (SOC) and state-of-health (SOH) estimation, cell balancing, and communication with an On-Board Computer (OBC) via the Simple Serial Protocol (SSP) over RS485. The system is designed for a high-reliability application, likely aerospace or satellite systems, given features like mission termination commands (KEN) and firmware update capabilities.
+
+\*\*Reasoning:\*\*
+
+\- \*\*Redundancy\*\*: Two BQ76920 ICs monitor the same battery pack to ensure fault tolerance, critical for safety-critical applications.
+
+\- \*\*Modularity\*\*: The code separates concerns (e.g., SOC/SOH estimation, protection, communication) into distinct functions for maintainability and scalability.
+
+\- \*\*Safety\*\*: Extensive fault detection and recovery mechanisms (e.g., overvoltage, overcurrent, temperature limits) protect the battery and system.
+
+\- \*\*Communication\*\*: SSP over RS485 ensures robust communication with the OBC, with support for commands like power line control (SON/SOF) and telemetry.
+
+\---
+
+\### 2. \*\*Main Program Structure (\`main.c\`)\*\*
+
+The \`main()\` function initializes the system and enters an infinite loop that performs periodic tasks every \`LOOP\_TIME\` (assumed to be in seconds, typically 0.1s or 1s). The loop handles:
+
+\- Reading battery parameters (voltages, currents, temperatures).
+
+\- Checking for faults and updating BMS mode.
+
+\- Managing charging, balancing, and SOC/SOH.
+
+\- Logging and communicating with the OBC.
+
+\*\*Reasoning:\*\*
+
+\- \*\*Periodic Execution\*\*: The loop ensures real-time monitoring and control, critical for battery safety. \`HAL\_Delay(LOOP\_TIME \* 1000)\` synchronizes tasks to a fixed interval.
+
+\- \*\*Initialization\*\*: Peripheral initialization (I2C, UART, RTC, etc.) occurs before the loop to ensure hardware readiness.
+
+\- \*\*Bootloader Check\*\*: The \`Bootloader\_Check()\` function allows the system to enter firmware update mode, enabling field upgrades without physical access.
+
+\- \*\*Error Handling\*\*: The \`Error\_Handler()\` function provides a fallback (blinking LED) for unrecoverable errors, aiding debugging.
+
+\---
+
+\### 3. \*\*Peripheral Initialization (\`SystemClock\_Config\`, \`MX\_\*\_Init\`)\*\*
+
+The code configures the STM32’s system clock, I2C, UART, RTC, TIM, and GPIO peripherals.
+
+\*\*Reasoning:\*\*
+
+\- \*\*System Clock\*\*: Uses an 8 MHz HSE oscillator (\`RCC\_SYSCLKSOURCE\_HSE\`) for low power and simplicity, sufficient for BMS tasks. No PLL is used to minimize complexity.
+
+\- \*\*I2C (I2C1, I2C2, I2C3)\*\*: Configured for 400 kHz communication with BQ76920 ICs and temperature sensors. Analog and digital filters improve noise immunity.
+
+\- \*\*UART/USART\*\*: USART1 (115200 baud) is used for logging over RS485, while USART2 (RS485 with DE pin control) communicates with the OBC using SSP.
+
+\- \*\*RTC\*\*: Provides timestamping for logs and time synchronization with the OBC, critical for event correlation.
+
+\- \*\*TIM4\*\*: Configured for PWM to control heaters, enabling precise temperature regulation via PID.
+
+\- \*\*GPIO\*\*: Configures LED for debugging, RS485 DE pin for transmit/receive control, and BQ76920 BOOT/ALERT pins for initialization and fault detection.
+
+\---
+
+\### 4. \*\*Battery Monitoring and Protection (\`BQ76920\_\*\` Functions)\*\*
+
+The BQ76920 ICs monitor cell voltages, pack current, and status flags, with functions like \`BQ76920\_ReadVoltages\`, \`BQ76920\_ReadCurrent\`, and \`BQ76920\_CheckStatus\`.
+
+\*\*Reasoning:\*\*
+
+\- \*\*Redundant Monitoring\*\*: Two ICs (I2C1, I2C2) monitor the same cells to detect discrepancies, enhancing reliability. \`BQ76920\_CheckRedundancy\` compares measurements to flag inconsistencies (\`ERROR\_DISCREPANCY\`).
+
+\- \*\*Protection Configuration\*\*: \`BQ76920\_ConfigureProtection\` sets thresholds for overvoltage (4.2V), undervoltage (2.8V), overcurrent (5000 mA), and short-circuit protection, aligning with the \`BatteryConfig\` struct.
+
+\- \*\*Fault Detection\*\*: \`BQ76920\_CheckStatus\` reads hardware flags (e.g., OV, UV, OCD, SCD) to trigger software actions, reducing reliance on manual threshold checks.
+
+\- \*\*Error Logging\*\*: Failures in reading voltages or currents are logged (\`Log\_Error\`) to aid diagnostics, with sentinel values (e.g., 0 for voltages) to prevent invalid data usage.
+
+\---
+
+\### 5. \*\*State Estimation (\`Update\_SOC\_SOH\`)\*\*
+
+SOC and SOH are estimated using coulomb counting and a Kalman filter.
+
+\*\*Reasoning:\*\*
+
+\- \*\*Coulomb Counting\*\*: Integrates average current (\`(pack\_current\_1 + pack\_current\_2) / 2\`) over time (\`LOOP\_TIME\`) to track charge flow, providing a baseline SOC estimate.
+
+\- \*\*Kalman Filter\*\*: Smooths noisy measurements (\`KalmanFilter\_Update\`) to improve SOC and SOH accuracy, accounting for sensor noise and model uncertainties.
+
+\- \*\*SOH Calculation\*\*: Updates SOH when SOC reaches 100%, comparing actual capacity (\`coulomb\_count\`) to initial capacity, reflecting battery degradation.
+
+\- \*\*Bounds Checking\*\*: Clamps SOC and SOH to \[0, 100\] to prevent invalid values from propagating.
+
+\- \*\*Initialization\*\*: \`KalmanFilter\_Init\` sets initial SOC (e.g., 50%) and SOH (e.g., 100%) with reasonable covariance values for convergence.
+
+\---
+
+\### 6. \*\*BMS Mode Control (\`Update\_BMS\_Mode\`)\*\*
+
+Manages the BMS state (\`MODE\_CHARGING\`, \`MODE\_DISCHARGING\`, \`MODE\_SLEEP\`, \`MODE\_FAULT\`) based on faults, current, and SOC.
+
+\*\*Reasoning:\*\*
+
+\- \*\*Fault Handling\*\*: Checks \`error\_flags\` for conditions like overvoltage, undervoltage, overcurrent, etc., entering \`MODE\_FAULT\` and disabling charge/discharge as needed.
+
+\- \*\*Recovery Logic\*\*: Attempts to clear faults (e.g., reinitializing BQ76920 for \`ERROR\_DEVICE\_XREADY\`) with timeouts and maximum retry limits (\`MAX\_RECOVERY\_ATTEMPTS\`) to prevent infinite loops.
+
+\- \*\*State Transitions\*\*:
+
+\- Negative current (charging) → \`MODE\_CHARGING\`, enabling charge.
+
+\- Positive current (discharging) → \`MODE\_DISCHARGING\`, enabling discharge.
+
+\- Zero current and low SOC → \`MODE\_CHARGING\` to prioritize recharging.
+
+\- Zero current and normal SOC → \`MODE\_SLEEP\` to conserve power.
+
+\- \*\*Redundancy\*\*: Applies charge/discharge settings to both BQ76920 ICs (\`BQ76920\_SetChargeEnable\`) for consistency.
+
+\- \*\*Timeouts and Resets\*\*: Persistent faults trigger a system reset (\`HAL\_NVIC\_SystemReset\`) after timeouts (e.g., 30s for voltage faults, 60s for temperature faults) to recover or alert the OBC.
+
+\---
+
+\### 7. \*\*Charging Algorithm (\`ChargeBattery\`)\*\*
+
+Implements a Constant Current-Constant Voltage (CC-CV) charging strategy.
+
+\*\*Reasoning:\*\*
+
+\- \*\*CC Mode\*\*: Charges at constant current until any cell reaches the CV threshold (4.2V), maximizing charge speed while monitoring temperature.
+
+\- \*\*CV Mode\*\*: Switches to constant voltage when the maximum cell voltage exceeds 4.2V, reducing current to prevent overcharging.
+
+\- \*\*Safety Checks\*\*: Disables charging if temperatures exceed thresholds or if communication with sensors fails, protecting the battery.
+
+\- \*\*Timeout\*\*: Limits total charge time (\`max\_charge\_time\`, 3600s) to prevent overcharging in case of faults.
+
+\- \*\*State Tracking\*\*: Uses \`charge\_start\_time\` and \`in\_cv\_mode\` to manage transitions and duration, resetting on completion or error.
+
+\---
+
+\### 8. \*\*Cell Balancing (\`BQ76920\_BalanceCells\`)\*\*
+
+Balances cell voltages to ensure uniform charge levels.
+
+\*\*Reasoning:\*\*
+
+\- \*\*Balancing Logic\*\*: Activates balancing for cells with voltages significantly higher than the minimum, discharging them via resistors (controlled by BQ76920).
+
+\- \*\*Redundancy\*\*: Applies balancing to both ICs (\`balancing\_mask\_1\`, \`balancing\_mask\_2\`) to maintain consistency.
+
+\- \*\*Status Tracking\*\*: Sets \`balancing\_active\` when any cell is balancing, included in telemetry for OBC monitoring.
+
+\- \*\*Error Handling\*\*: Logs balancing failures to diagnose hardware issues.
+
+\---
+
+\### 9. \*\*Temperature Control (\`PID\_Control\`, \`Read\_Internal\_Temperature\`)\*\*
+
+Regulates battery temperature using heaters and monitors PCB temperature.
+
+\*\*Reasoning:\*\*
+
+\- \*\*PID Control\*\*: Adjusts heater PWM (\`TIM4\`) based on the lowest battery temperature (\`lowest\_temp\`), ensuring cells stay within safe operating ranges.
+
+\- \*\*Internal Temperature\*\*: Reads the STM32’s internal sensor (\`Read\_Internal\_Temperature\`) to monitor PCB temperature, protecting electronics.
+
+\- \*\*Safety\*\*: Flags overtemperature (\`ERROR\_OVERTEMP\`) or undertemperature (\`ERROR\_UNDERTEMP\`) if thresholds are breached, disabling charging/discharging as needed.
+
+\---
+
+\### 10. \*\*Logging (\`Log\_Error\`, \`Log\_Read\_All\`, \`Log\_Init\`)\*\*
+
+Stores error messages and system data in flash memory for diagnostics.
+
+\*\*Reasoning:\*\*
+
+\- \*\*Circular Buffer\*\*: Uses a fixed number of log entries (\`NUM\_LOG\_ENTRIES\`) in flash, with \`next\_slot\` tracking the write position, ensuring efficient storage.
+
+\- \*\*Timestamping\*\*: Includes \`HAL\_GetTick\` timestamps in logs for event sequencing, despite RTC availability, for simplicity.
+
+\- \*\*Flash Management\*\*: Erases pages and updates \`next\_slot\` in flash (\`NEXT\_SLOT\_ADDR\`) to persist log state across resets.
+
+\- \*\*Periodic Readout\*\*: Sends logs over RS485 every 10 seconds (\`Log\_Read\_All\`) for OBC analysis, aiding remote diagnostics.
+
+\- \*\*Error Formatting\*\*: Uses \`vsnprintf\` for flexible error message formatting, capped at \`MESSAGE\_SIZE\` to prevent buffer overflows.
+
+\---
+
+\### 11. \*\*Communication (\`SSP\_\*\` Functions)\*\*
+
+Handles SSP communication with the OBC over RS485.
+
+\*\*Reasoning:\*\*
+
+\- \*\*Protocol Structure\*\*: SSP frames include source/destination addresses, command IDs, and data, with CRC for error detection (assumed in \`SSP\_ConstructFrame\`).
+
+\- \*\*Command Processing\*\*:
+
+\- \*\*PING (0x00)\*\*: Responds with ACK for connectivity checks.
+
+\- \*\*SON/SOF (0x0B/0x0C)\*\*: Controls power lines (PWRL0–PWRL15), critical for satellite power management.
+
+\- \*\*KEN/KDIS (0x31/0x32)\*\*: Enables/disables mission termination (battery disconnection), with \`mission\_termination\_enabled\` as a safety interlock.
+
+\- \*\*SM/GM (0x15/0x16)\*\*: Sets/gets BMS mode, allowing OBC override.
+
+\- \*\*SFP (0x1B)\*\*: Sets parameters like mission termination enable or triggers firmware updates.
+
+\- \*\*Telemetry (GOSTM/GOTLM)\*\*: Sends comprehensive battery status (\`SSP\_SendStatus\`) every 5 seconds or on request.
+
+\- \*\*RS485 Control\*\*: Toggles the DE pin (\`RS4852\_DE\_Pin\`) to switch between transmit and receive modes, ensuring half-duplex communication.
+
+\- \*\*Error Handling\*\*: Responds with NACK for invalid commands or data, logging all received commands for traceability.
+
+\---
+
+\### 12. \*\*Firmware Update (\`Bootloader\_Check\`, \`Bootloader\_FirmwareUpdate\`, \`JumpToApplication\`)\*\*
+
+Supports over-the-air firmware updates via SSP.
+
+\*\*Reasoning:\*\*
+
+\- \*\*Bootloader Mode\*\*: Checks a flash flag (\`FIRMWARE\_UPDATE\_FLAG\_ADDR\`, 0xDEADBEEF) at startup to enter update mode, set by the SFP command.
+
+\- \*\*Update Process\*\*:
+
+\- Erases the application flash region (\`APP\_START\_ADDR\` to \`APP\_END\_ADDR\`).
+
+\- Receives packets (\`FIRMWARE\_UPDATE\_PACKET\_SIZE\`, 128 bytes) via SSP, writing them to flash.
+
+\- Verifies CRC16 (\`CalculateCRC16\`) to ensure data integrity.
+
+\- Sets a validity flag (\`APP\_VALIDITY\_FLAG\_ADDR\`, 0xA5A5A5A5) on success.
+
+\- \*\*Timeout\*\*: Reboots after 10 seconds (\`FIRMWARE\_UPDATE\_TIMEOUT\`) if no packets are received, preventing hangs.
+
+\- \*\*Application Validation\*\*: \`IsApplicationValid\` checks CRC and validity flag before jumping to the application, falling back to a backup image if invalid.
+
+\- \*\*Backup Image\*\*: Supports a backup application (\`BACKUP\_START\_ADDR\`) for recovery, critical for high-reliability systems.
+
+\- \*\*Halt on Failure\*\*: If both application and backup are invalid, the system halts with a blinking LED for debugging.
+
+\---
+
+\### 13. \*\*Debugging and Indicators\*\*
+
+Uses an LED for status indication.
+
+\*\*Reasoning:\*\*
+
+\- \*\*Startup Indication\*\*: Blinks rapidly for 5 seconds (\`STARTUP\_BLINK\_DURATION\`) to confirm successful boot, aiding field diagnostics.
+
+\- \*\*Error Indication\*\*: \`Error\_Handler\` blinks the LED indefinitely on unrecoverable errors, providing a visual cue.
+
+\- \*\*Minimal Overhead\*\*: Uses simple GPIO toggling (\`HAL\_GPIO\_TogglePin\`) to minimize CPU load.
+
+\---
+
+\### 14. \*\*Battery Configuration (\`BatteryConfig\`)\*\*
+
+Defines battery parameters in a struct.
+
+\*\*Reasoning:\*\*
+
+\- \*\*Nominal Capacity (4000 mAh)\*\*: Reflects a 4S2P configuration with 2000 mAh cells in parallel, used for SOC/SOH calculations.
+
+\- \*\*Thresholds\*\*: Overvoltage (4.2V), undervoltage (2.8V), overcurrent (5000 mA), and temperature limits (-20°C to 60°C) align with typical lithium-ion specifications.
+
+\- \*\*SOC Low Threshold (20%)\*\*: Triggers \`charge\_immediately\` to prioritize charging, preventing deep discharge.
+
+\- \*\*CV Threshold (4.2V)\*\*: Matches the maximum cell voltage for CC-CV charging.
+
+\- \*\*Max Charge Time (3600s)\*\*: Limits charging duration to prevent overcharging.
+
+\---
+
+\### 15. \*\*Time Synchronization (\`SSP\_RequestTime\`)\*\*
+
+Synchronizes the RTC with the OBC every 60 seconds.
+
+\*\*Reasoning:\*\*
+
+\- \*\*Accuracy\*\*: Ensures accurate timestamps for logs and coordinated operation with the OBC.
+
+\- \*\*Periodic Sync\*\*: 60-second interval balances accuracy with communication overhead.
+
+\- \*\*Fallback\*\*: Logs failures to diagnose communication issues without disrupting BMS operation.
+
+\---
+
+\### 16. \*\*Error Handling and Safety\*\*
+
+The system prioritizes safety through extensive fault detection and recovery.
+
+\*\*Reasoning:\*\*
+
+\- \*\*Fault Flags\*\*: \`error\_flags\` tracks conditions like \`ERROR\_OVERVOLTAGE\`, \`ERROR\_OVERTEMP\`, etc., centralizing fault management.
+
+\- \*\*Protective Actions\*\*: Disables charging/discharging based on fault type (e.g., charge disabled for overvoltage, discharge disabled for undervoltage).
+
+\- \*\*Recovery Attempts\*\*: Limits retries (\`MAX\_RECOVERY\_ATTEMPTS\`, 3) for faults like \`ERROR\_DEVICE\_XREADY\` to avoid infinite loops.
+
+\- \*\*System Reset\*\*: Triggers a reset for persistent faults, assuming the OBC or watchdog can handle recovery.
+
+\- \*\*Logging\*\*: All faults and actions are logged, enabling post-event analysis.
+
+\---
+
+\### 17. \*\*Assumptions and Dependencies\*\*
+
+The code relies on external libraries and definitions not shown (e.g., \`BQ76920.h\`, \`ssp.h\`, \`pid.h\`, \`kalman\_filter.h\`). Key assumptions include:
+
+\- \`LOOP\_TIME\`: Defines the main loop period, critical for timing calculations.
+
+\- \`NUM\_GROUPS\_PER\_IC\`: Assumed to be 4, matching the 4S configuration.
+
+\- \`INITIAL\_SOC\`, \`INITIAL\_SOH\`: Initial values for SOC/SOH estimation.
+
+\- \`FLASH\_LOG\_PAGE\`, \`APP\_START\_ADDR\`, etc.: Flash memory layout for logging and firmware.
+
+\*\*Reasoning:\*\*
+
+\- \*\*External Libraries\*\*: Modular design delegates low-level BQ76920 control, SSP framing, and Kalman filtering to separate modules, improving maintainability.
+
+\- \*\*Constants\*\*: Hardcoded values (e.g., thresholds, flash addresses) suggest a specific hardware configuration, with potential for EEPROM-based configuration in production.
+
+\- \*\*4S2P Configuration\*\*: Tailored to the battery pack, with flexibility for other configurations by adjusting \`BatteryConfig\`.
+
+\---
+
+\### 18. \*\*Potential Improvements\*\*
+
+While robust, the code could benefit from:
+
+\- \*\*Dynamic Configuration\*\*: Load \`BatteryConfig\` from flash/EEPROM to support different battery types.
+
+\- \*\*Watchdog Timer\*\*: Add a hardware watchdog to recover from software hangs.
+
+\- \*\*Interrupt-Driven Communication\*\*: Use UART interrupts for SSP to reduce polling overhead.
+
+\- \*\*Error Recovery Enhancements\*\*: Implement more sophisticated recovery (e.g., partial operation on single BQ76920 failure).
+
+\- \*\*Power Optimization\*\*: Add low-power modes for \`MODE\_SLEEP\` to reduce consumption.
+
+\*\*Reasoning:\*\*
+
+\- \*\*Flexibility\*\*: Dynamic configuration supports varied applications without recompilation.
+
+\- \*\*Reliability\*\*: A watchdog ensures recovery from unforeseen crashes.
+
+\- \*\*Efficiency\*\*: Interrupt-driven communication frees CPU cycles for other tasks.
+
+\- \*\*Robustness\*\*: Partial operation maintains functionality during partial failures.
+
+\- \*\*Energy Savings\*\*: Low-power modes extend battery life in idle states.
+
+\---
+
+\### Conclusion
+
+The BMS firmware is a well-structured, safety-focused implementation for managing a 4S2P lithium-ion battery pack. Its use of redundancy, fault detection, and recovery mechanisms makes it suitable for high-reliability applications. The modular design, extensive logging, and SSP communication ensure maintainability and integration with an OBC. The reasoning behind each logic block reflects a balance of safety, reliability, and practicality, with clear opportunities for optimization based on specific deployment needs.
+
 
 
