@@ -136,7 +136,7 @@ This project implements a Battery Management System (BMS) using the **STM32L476R
 - **PB4**: GPIO_Output (BOOT for BQ76920 IC1)
 
 
-#### 3.4 PWM for Heaters
+#### 3.4 PWM for Heaters(THIS IS WRONG I NEED TO WORK ON THIS)
 - **TIM4**:
   - PB8: TIM4_CH3 (HEATER2)
   - PB9: TIM4_CH4 (HEATER1)
