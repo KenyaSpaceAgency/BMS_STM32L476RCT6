@@ -1,0 +1,2 @@
+../Core/Src/power_switch.c:24:6:PowerSwitch_Init	8	static
+../Core/Src/power_switch.c:38:6:PowerSwitch_Control	24	static

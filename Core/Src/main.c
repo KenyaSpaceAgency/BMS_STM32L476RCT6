@@ -28,39 +28,39 @@
   ******************************************************************************
   */
 /* USER CODE END Header */
-
 /* Includes ------------------------------------------------------------------*/
-#include "main.h"           // Main header for STM32 HAL and peripheral definitions
-#include "BQ76920.h"        // Driver for BQ76920 battery monitoring ICs
-#include "temperature.h"    // Temperature sensor reading functions
-#include "pid.h"            // PID controller for heater regulation
-#include "kalman_filter.h"  // Kalman filter for SOC/SOH estimation
-#include "ssp.h"            // SSP protocol for communication with the OBC
-#include "adc.h"            // ADC functions for internal temperature reading
-#include "crc16.h"          // CRC-16 calculation for firmware updates and data integrity
-#include <stdio.h>          // Standard I/O for string formatting (e.g., logging)
-#include <string.h>         // String operations (e.g., memcpy, strncpy)
-#include <stdarg.h>         // Variable argument handling for Log_Error function
+#include "main.h"
+
+/* Private includes ----------------------------------------------------------*/
+/* USER CODE BEGIN Includes */
+
+/* USER CODE END Includes */
+
+/* Private typedef -----------------------------------------------------------*/
+/* USER CODE BEGIN PTD */
+
+/* USER CODE END PTD */
+
+/* Private define ------------------------------------------------------------*/
+/* USER CODE BEGIN PD */
+
+/* USER CODE END PD */
+
+/* Private macro -------------------------------------------------------------*/
+/* USER CODE BEGIN PM */
+
+/* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
-/* @brief  Peripheral handles for the STM32 microcontroller.
- * @note   These handles are used by the HAL library to interact with hardware peripherals.
- * @context Initialized in the `main` function during system setup, used throughout the BMS
- *          for communication, timing, and control.
- */
-// Handle for I2C1 peripheral, used for communication with the first BQ76920 IC
+ADC_HandleTypeDef hadc1;
+
 I2C_HandleTypeDef hi2c1;
-// Handle for I2C2 peripheral, used for communication with the second BQ76920 IC
 I2C_HandleTypeDef hi2c2;
-// Handle for I2C3 peripheral, potentially used for additional sensors or devices
 I2C_HandleTypeDef hi2c3;
-// Handle for Real-Time Clock (RTC), used for timestamping logs and timing operations
+
 RTC_HandleTypeDef hrtc;
-// Handle for Timer 4, used for PWM control (e.g., for heaters or charging)
-TIM_HandleTypeDef htim4;
-// Handle for UART1, used for serial communication (e.g., logging over RS485)
+
 UART_HandleTypeDef huart1;
-// Handle for USART2, used for SSP (Spacecraft Serial Protocol) communication with the OBC
 USART_HandleTypeDef husart2;
 
 /* USER CODE BEGIN PV */
@@ -189,10 +189,9 @@ static void MX_I2C1_Init(void);
 static void MX_I2C2_Init(void);
 static void MX_I2C3_Init(void);
 static void MX_RTC_Init(void);
-static void MX_TIM4_Init(void);
 static void MX_USART1_UART_Init(void);
 static void MX_USART2_Init(void);
-
+static void MX_ADC1_Init(void);
 /* USER CODE BEGIN PFP */
 /* @brief  Function prototypes for private BMS functions.
  * @note   These functions handle core BMS operations like logging, state updates, and communication.
@@ -1409,61 +1408,40 @@ void JumpToApplication(void)
 /* USER CODE END 0 */
 
 /**
-  * @brief  The application entry point for the BMS firmware.
-  * @retval int: Returns 0 on successful execution (though never reached due to infinite loop).
-  * @note   - Initializes the STM32 microcontroller, peripherals, and BMS components.
-  *         - Checks for firmware update mode and handles updates if requested.
-  *         - Attempts to jump to the application code, falling back to normal operation if the jump fails.
-  *         - Runs the main BMS loop, performing monitoring, control, and communication tasks.
-  * @context This is the main entry point of the BMS firmware, executed on system startup in a CubeSat.
-  *          It sets up the system and runs the core BMS loop, ensuring continuous monitoring and control
-  *          of the battery system, critical for mission success.
-  * @integration The STM32 integrates multiple peripherals (I2C, UART, USART, TIM, RTC, ADC) to manage
-  *              the BMS. The main loop orchestrates all BMS functions, interfacing with hardware via HAL
-  *              drivers and communicating with the OBC via SSP protocol.
-  * @debug  - If the system fails to initialize, check peripheral configurations (`MX_*_Init`) and ensure
-  *           no hardware faults (e.g., I2C bus issues, GPIO misconfigurations).
-  *         - If the main loop behaves unexpectedly, monitor logs (`Log_Error`) to trace errors in voltage,
-  *           current, or temperature readings.
-  *         - Use a debugger to step through initialization and loop execution for detailed troubleshooting.
+  * @brief  The application entry point.
+  * @retval int
   */
 int main(void)
 {
-    /* USER CODE BEGIN 1 */
-    /* USER CODE END 1 */
 
-    /* MCU Configuration--------------------------------------------------------*/
+  /* USER CODE BEGIN 1 */
+  /* USER CODE END 1 */
 
-    // Initialize the HAL library and reset all peripherals to their default state
-    HAL_Init();
+  /* MCU Configuration--------------------------------------------------------*/
 
-    /* USER CODE BEGIN Init */
-    /* USER CODE END Init */
+  /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
+  HAL_Init();
 
-    // Configure the system clock to use an 8 MHz HSE oscillator for low power consumption
-    SystemClock_Config();
+  /* USER CODE BEGIN Init */
+  /* USER CODE END Init */
 
-    /* USER CODE BEGIN SysInit */
-    /* USER CODE END SysInit */
+  /* Configure the system clock */
+  SystemClock_Config();
 
-    // Initialize all configured peripherals
-    MX_GPIO_Init();          // GPIO for LEDs, RS485 DE, and BQ76920 control signals
-    MX_I2C1_Init();          // I2C1 for first BQ76920 IC
-    MX_I2C2_Init();          // I2C2 for second BQ76920 IC
-    MX_I2C3_Init();          // I2C3 for additional devices (if used)
-    MX_RTC_Init();           // RTC for timestamping and time synchronization
-    MX_TIM4_Init();          // TIM4 for PWM control of heaters
-    MX_USART1_UART_Init();   // UART1 for logging over RS485
-    MX_USART2_Init();        // USART2 for SSP communication with OBC
-    MX_ADC1_Init();          // ADC1 for internal temperature sensor
+  /* USER CODE BEGIN SysInit */
+  /* USER CODE END SysInit */
 
-    /* USER CODE BEGIN 2 */
-
-    // Start PWM on TIM4 channels 3 and 4 for heater control, initially set to 0% duty cycle
-    HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_3);
-    HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_4);
-    __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3, 0); // Heater 1 off
-    __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_4, 0); // Heater 2 off
+  /* Initialize all configured peripherals */
+  MX_GPIO_Init();
+  MX_I2C1_Init();
+  MX_I2C2_Init();
+  MX_I2C3_Init();
+  MX_RTC_Init();
+  MX_USART1_UART_Init();
+  MX_USART2_Init();
+  MX_ADC1_Init();
+  /* USER CODE BEGIN 2 */
+S
 
     // Set an initial RTC time and date for logging purposes
     RTC_TimeTypeDef sTime = {0};
@@ -1537,10 +1515,10 @@ int main(void)
     initial_capacity = battery_config.nominal_capacity;
     actual_capacity = battery_config.nominal_capacity;
     coulomb_count = (INITIAL_SOC / 100.0) * battery_config.nominal_capacity;
-    /* USER CODE END 2 */
+  /* USER CODE END 2 */
 
-    /* Infinite loop */
-    /* USER CODE BEGIN WHILE */
+  /* Infinite loop */
+  /* USER CODE BEGIN WHILE */
     // Timestamps for periodic tasks
     uint32_t last_log_read = 0;    // Last time logs were sent to OBC
     uint32_t last_status_send = 0; // Last time telemetry was sent to OBC
@@ -1738,500 +1716,518 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-    /* USER CODE END 3 */
+  /* USER CODE END 3 */
 }
 
 /**
-  * @brief  Configures the system clock for the STM32 microcontroller.
-  * @retval None (configures hardware clocks).
-  * @note   - Uses an 8 MHz High-Speed External (HSE) oscillator for low power consumption.
-  *         - Disables the PLL to simplify the clock tree and reduce power usage.
-  *         - Configures the Low-Speed External (LSE) oscillator for the RTC.
-  *         - Sets the system clock to HSE (8 MHz) with no division for AHB, APB1, and APB2 buses.
-  * @context Called during system startup in `main` to set up the clock tree. The clock configuration
-  *          ensures low power operation while providing sufficient performance for the BMS in a CubeSat.
-  * @integration The STM32’s RCC (Reset and Clock Control) peripheral is configured to use HSE for
-  *              the system clock and LSE for the RTC, ensuring accurate timing for BMS operations
-  *              (e.g., PWM, UART, RTC).
-  * @debug  - If the system fails to boot, check the HSE and LSE oscillator functionality (e.g., crystal
-  *           issues) and ensure the clock configuration matches the hardware setup.
-  *         - Verify that `FLASH_LATENCY_0` is appropriate for an 8 MHz clock (adjust if clock speed changes).
+  * @brief System Clock Configuration
+  * @retval None
   */
 void SystemClock_Config(void)
 {
-    RCC_OscInitTypeDef RCC_OscInitStruct = {0};
-    RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
+  RCC_OscInitTypeDef RCC_OscInitStruct = {0};
+  RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
 
-    // Configure voltage scaling for low power operation
-    if (HAL_PWREx_ControlVoltageScaling(PWR_REGULATOR_VOLTAGE_SCALE1) != HAL_OK)
-    {
-        Error_Handler();
-    }
+  /** Configure the main internal regulator output voltage
+  */
+  if (HAL_PWREx_ControlVoltageScaling(PWR_REGULATOR_VOLTAGE_SCALE1) != HAL_OK)
+  {
+    Error_Handler();
+  }
 
-    // Enable backup domain access for LSE configuration
-    HAL_PWR_EnableBkUpAccess();
-    // Configure LSE drive capability to low for power efficiency
-    __HAL_RCC_LSEDRIVE_CONFIG(RCC_LSEDRIVE_LOW);
+  /** Configure LSE Drive Capability
+  */
+  HAL_PWR_EnableBkUpAccess();
+  __HAL_RCC_LSEDRIVE_CONFIG(RCC_LSEDRIVE_LOW);
 
-    // Configure oscillators: Enable HSE (8 MHz) and LSE (32.768 kHz)
-    RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE | RCC_OSCILLATORTYPE_LSE;
-    RCC_OscInitStruct.HSEState = RCC_HSE_ON;
-    RCC_OscInitStruct.LSEState = RCC_LSE_ON;
-    RCC_OscInitStruct.PLL.PLLState = RCC_PLL_NONE; // Disable PLL for simplicity
-    if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
-    {
-        Error_Handler();
-    }
+  /** Initializes the RCC Oscillators according to the specified parameters
+  * in the RCC_OscInitTypeDef structure.
+  */
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE|RCC_OSCILLATORTYPE_LSE;
+  RCC_OscInitStruct.HSEState = RCC_HSE_ON;
+  RCC_OscInitStruct.LSEState = RCC_LSE_ON;
+  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_NONE;
+  if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
+  {
+    Error_Handler();
+  }
 
-    // Configure clock sources and dividers
-    RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_SYSCLK |
-                                  RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2;
-    RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_HSE; // Use HSE as system clock
-    RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;     // AHB clock = SYSCLK (8 MHz)
-    RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;      // APB1 clock = HCLK (8 MHz)
-    RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;      // APB2 clock = HCLK (8 MHz)
+  /** Initializes the CPU, AHB and APB buses clocks
+  */
+  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
+                              |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
+  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_HSE;
+  RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
+  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
+  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
 
-    // Apply clock configuration with zero flash latency (suitable for 8 MHz)
-    if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_0) != HAL_OK)
-    {
-        Error_Handler();
-    }
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_0) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Enables the Clock Security System
+  */
+  HAL_RCC_EnableCSS();
+
+  /** Enables the Clock Security System
+  */
+  HAL_RCCEx_EnableLSECSS();
 }
 
 /**
-  * @brief  Initializes the I2C1 peripheral for communication with the first BQ76920 IC.
-  * @retval None (configures I2C1 peripheral).
-  * @note   - Configures I2C1 for 400 kHz communication, suitable for BQ76920 and TMP100 sensors.
-  *         - Uses 7-bit addressing mode with no dual addressing.
-  *         - Enables analog filter and disables digital filter for noise immunity in space.
-  * @context Called during system startup in `main` to initialize I2C1, which is used to communicate
-  *          with the first BQ76920 IC (battery monitoring) and potentially the first TMP100 temperature
-  *          sensor (NTC-1). I2C communication is critical for BMS monitoring in a CubeSat.
-  * @integration The STM32’s I2C1 peripheral is configured to interface with external devices (BQ76920,
-  *              TMP100) via the I2C bus. The 400 kHz speed balances performance and reliability in a
-  *              noisy space environment.
-  * @debug  - If I2C communication fails, check the SCL/SDA lines for proper pull-up resistors and
-  *           ensure no bus contention (e.g., address conflicts).
-  *         - Verify the timing value (`0x00210607`) is correct for an 8 MHz system clock and 400 kHz I2C speed.
-  *         - Use an oscilloscope to debug I2C signals if communication issues persist.
+  * @brief ADC1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_ADC1_Init(void)
+{
+
+  /* USER CODE BEGIN ADC1_Init 0 */
+
+  /* USER CODE END ADC1_Init 0 */
+
+  ADC_MultiModeTypeDef multimode = {0};
+  ADC_ChannelConfTypeDef sConfig = {0};
+
+  /* USER CODE BEGIN ADC1_Init 1 */
+
+  /* USER CODE END ADC1_Init 1 */
+
+  /** Common config
+  */
+  hadc1.Instance = ADC1;
+  hadc1.Init.ClockPrescaler = ADC_CLOCK_ASYNC_DIV4;
+  hadc1.Init.Resolution = ADC_RESOLUTION_12B;
+  hadc1.Init.DataAlign = ADC_DATAALIGN_RIGHT;
+  hadc1.Init.ScanConvMode = ADC_SCAN_DISABLE;
+  hadc1.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
+  hadc1.Init.LowPowerAutoWait = DISABLE;
+  hadc1.Init.ContinuousConvMode = DISABLE;
+  hadc1.Init.NbrOfConversion = 1;
+  hadc1.Init.DiscontinuousConvMode = DISABLE;
+  hadc1.Init.ExternalTrigConv = ADC_SOFTWARE_START;
+  hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
+  hadc1.Init.DMAContinuousRequests = DISABLE;
+  hadc1.Init.Overrun = ADC_OVR_DATA_PRESERVED;
+  hadc1.Init.OversamplingMode = DISABLE;
+  if (HAL_ADC_Init(&hadc1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure the ADC multi-mode
+  */
+  multimode.Mode = ADC_MODE_INDEPENDENT;
+  if (HAL_ADCEx_MultiModeConfigChannel(&hadc1, &multimode) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure Regular Channel
+  */
+  sConfig.Channel = ADC_CHANNEL_16;
+  sConfig.Rank = ADC_REGULAR_RANK_1;
+  sConfig.SamplingTime = ADC_SAMPLETIME_2CYCLES_5;
+  sConfig.SingleDiff = ADC_SINGLE_ENDED;
+  sConfig.OffsetNumber = ADC_OFFSET_NONE;
+  sConfig.Offset = 0;
+  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN ADC1_Init 2 */
+
+  /* USER CODE END ADC1_Init 2 */
+
+}
+
+/**
+  * @brief I2C1 Initialization Function
+  * @param None
+  * @retval None
   */
 static void MX_I2C1_Init(void)
 {
-    hi2c1.Instance = I2C1;
-    hi2c1.Init.Timing = 0x00210607; // Timing for 400 kHz with 8 MHz system clock
-    hi2c1.Init.OwnAddress1 = 0;     // No own address (master mode)
-    hi2c1.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
-    hi2c1.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
-    hi2c1.Init.OwnAddress2 = 0;
-    hi2c1.Init.OwnAddress2Masks = I2C_OA2_NOMASK;
-    hi2c1.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
-    hi2c1.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
-    if (HAL_I2C_Init(&hi2c1) != HAL_OK)
-    {
-        Error_Handler();
-    }
 
-    // Enable analog filter for noise immunity
-    if (HAL_I2CEx_ConfigAnalogFilter(&hi2c1, I2C_ANALOGFILTER_ENABLE) != HAL_OK)
-    {
-        Error_Handler();
-    }
+  /* USER CODE BEGIN I2C1_Init 0 */
 
-    // Disable digital filter (set to 0) to minimize latency
-    if (HAL_I2CEx_ConfigDigitalFilter(&hi2c1, 0) != HAL_OK)
-    {
-        Error_Handler();
-    }
+  /* USER CODE END I2C1_Init 0 */
+
+  /* USER CODE BEGIN I2C1_Init 1 */
+
+  /* USER CODE END I2C1_Init 1 */
+  hi2c1.Instance = I2C1;
+  hi2c1.Init.Timing = 0x00201D2B;
+  hi2c1.Init.OwnAddress1 = 0;
+  hi2c1.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
+  hi2c1.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
+  hi2c1.Init.OwnAddress2 = 0;
+  hi2c1.Init.OwnAddress2Masks = I2C_OA2_NOMASK;
+  hi2c1.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
+  hi2c1.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
+  if (HAL_I2C_Init(&hi2c1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure Analogue filter
+  */
+  if (HAL_I2CEx_ConfigAnalogFilter(&hi2c1, I2C_ANALOGFILTER_ENABLE) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure Digital filter
+  */
+  if (HAL_I2CEx_ConfigDigitalFilter(&hi2c1, 0) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN I2C1_Init 2 */
+
+  /* USER CODE END I2C1_Init 2 */
+
 }
 
 /**
-  * @brief  Initializes the I2C2 peripheral for communication with the second BQ76920 IC.
-  * @retval None (configures I2C2 peripheral).
-  * @note   - Configures I2C2 for 400 kHz communication, mirroring I2C1 settings.
-  *         - Used for redundancy with the second BQ76920 IC and potentially the second TMP100 sensor (NTC-2).
-  * @context Called during system startup in `main` to initialize I2C2, ensuring redundant battery
-  *          monitoring with the second BQ76920 IC in a CubeSat. Redundancy is critical for reliability.
-  * @integration The STM32’s I2C2 peripheral interfaces with the second BQ76920 IC and possibly NTC-2,
-  *              providing a separate I2C bus to isolate communication and improve fault tolerance.
-  * @debug  - Similar to I2C1: Check SCL/SDA lines, timing value, and use an oscilloscope for debugging.
-  *         - Ensure I2C2 pins are correctly mapped and not conflicting with other peripherals.
+  * @brief I2C2 Initialization Function
+  * @param None
+  * @retval None
   */
 static void MX_I2C2_Init(void)
 {
-    hi2c2.Instance = I2C2;
-    hi2c2.Init.Timing = 0x00210607; // 400 kHz with 8 MHz system clock
-    hi2c2.Init.OwnAddress1 = 0;
-    hi2c2.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
-    hi2c2.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
-    hi2c2.Init.OwnAddress2 = 0;
-    hi2c2.Init.OwnAddress2Masks = I2C_OA2_NOMASK;
-    hi2c2.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
-    hi2c2.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
-    if (HAL_I2C_Init(&hi2c2) != HAL_OK)
-    {
-        Error_Handler();
-    }
 
-    if (HAL_I2CEx_ConfigAnalogFilter(&hi2c2, I2C_ANALOGFILTER_ENABLE) != HAL_OK)
-    {
-        Error_Handler();
-    }
+  /* USER CODE BEGIN I2C2_Init 0 */
 
-    if (HAL_I2CEx_ConfigDigitalFilter(&hi2c2, 0) != HAL_OK)
-    {
-        Error_Handler();
-    }
+  /* USER CODE END I2C2_Init 0 */
+
+  /* USER CODE BEGIN I2C2_Init 1 */
+
+  /* USER CODE END I2C2_Init 1 */
+  hi2c2.Instance = I2C2;
+  hi2c2.Init.Timing = 0x00201D2B;
+  hi2c2.Init.OwnAddress1 = 0;
+  hi2c2.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
+  hi2c2.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
+  hi2c2.Init.OwnAddress2 = 0;
+  hi2c2.Init.OwnAddress2Masks = I2C_OA2_NOMASK;
+  hi2c2.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
+  hi2c2.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
+  if (HAL_I2C_Init(&hi2c2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure Analogue filter
+  */
+  if (HAL_I2CEx_ConfigAnalogFilter(&hi2c2, I2C_ANALOGFILTER_ENABLE) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure Digital filter
+  */
+  if (HAL_I2CEx_ConfigDigitalFilter(&hi2c2, 0) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN I2C2_Init 2 */
+
+  /* USER CODE END I2C2_Init 2 */
+
 }
 
 /**
-  * @brief  Initializes the I2C3 peripheral for potential additional sensors or devices.
-  * @retval None (configures I2C3 peripheral).
-  * @note   - Configures I2C3 with the same settings as I2C1 and I2C2 (400 kHz, 7-bit addressing).
-  *         - Not explicitly used in the current implementation but available for future expansion.
-  * @context Called during system startup in `main` to provide an additional I2C bus for future use,
-  *          such as adding more sensors or devices to the BMS in a CubeSat.
-  * @integration The STM32’s I2C3 peripheral provides scalability for the BMS, allowing additional
-  *              devices to be integrated without modifying the primary I2C buses (I2C1, I2C2).
-  * @debug  - If used in the future, apply the same debugging steps as I2C1/I2C2 (check SCL/SDA, timing).
-  *         - Ensure I2C3 pins are not conflicting with other peripherals in the current pin mapping.
+  * @brief I2C3 Initialization Function
+  * @param None
+  * @retval None
   */
 static void MX_I2C3_Init(void)
 {
-    hi2c3.Instance = I2C3;
-    hi2c3.Init.Timing = 0x00210607; // 400 kHz with 8 MHz system clock
-    hi2c3.Init.OwnAddress1 = 0;
-    hi2c3.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
-    hi2c3.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
-    hi2c3.Init.OwnAddress2 = 0;
-    hi2c3.Init.OwnAddress2Masks = I2C_OA2_NOMASK;
-    hi2c3.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
-    hi2c3.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
-    if (HAL_I2C_Init(&hi2c3) != HAL_OK)
-    {
-        Error_Handler();
-    }
 
-    if (HAL_I2CEx_ConfigAnalogFilter(&hi2c3, I2C_ANALOGFILTER_ENABLE) != HAL_OK)
-    {
-        Error_Handler();
-    }
+  /* USER CODE BEGIN I2C3_Init 0 */
 
-    if (HAL_I2CEx_ConfigDigitalFilter(&hi2c3, 0) != HAL_OK)
-    {
-        Error_Handler();
-    }
+  /* USER CODE END I2C3_Init 0 */
+
+  /* USER CODE BEGIN I2C3_Init 1 */
+
+  /* USER CODE END I2C3_Init 1 */
+  hi2c3.Instance = I2C3;
+  hi2c3.Init.Timing = 0x00201D2B;
+  hi2c3.Init.OwnAddress1 = 0;
+  hi2c3.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
+  hi2c3.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
+  hi2c3.Init.OwnAddress2 = 0;
+  hi2c3.Init.OwnAddress2Masks = I2C_OA2_NOMASK;
+  hi2c3.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
+  hi2c3.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
+  if (HAL_I2C_Init(&hi2c3) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure Analogue filter
+  */
+  if (HAL_I2CEx_ConfigAnalogFilter(&hi2c3, I2C_ANALOGFILTER_ENABLE) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure Digital filter
+  */
+  if (HAL_I2CEx_ConfigDigitalFilter(&hi2c3, 0) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN I2C3_Init 2 */
+
+  /* USER CODE END I2C3_Init 2 */
+
 }
 
 /**
-  * @brief  Initializes the Real-Time Clock (RTC) peripheral for timestamping and time synchronization.
-  * @retval None (configures RTC peripheral).
-  * @note   - Configures the RTC for 24-hour format with an LSE-driven clock (32.768 kHz).
-  *         - Sets an initial time and date (reset to 00:00:00, January 1st) which is later synchronized
-  *           with the OBC via SSP.
-  *         - Enables timestamping functionality, though not used in the current implementation.
-  * @context Called during system startup in `main` to initialize the RTC, which is used for timestamping
-  *          logs and synchronizing with the OBC every 60 seconds. Accurate timekeeping is essential for
-  *          logging and scheduling in a CubeSat.
-  * @integration The STM32’s RTC peripheral, driven by the LSE oscillator, provides a reliable time source
-  *              for the BMS. It integrates with the SSP protocol (`SSP_RequestTime`) to sync with the OBC,
-  *              ensuring consistent time across the spacecraft.
-  * @debug  - If RTC initialization fails, check the LSE oscillator (ensure it’s enabled in `SystemClock_Config`).
-  *         - If time synchronization fails, verify SSP communication with the OBC (`SSP_RequestTime`).
-  *         - Ensure the RTC backup domain is properly powered (e.g., via a backup battery if used).
+  * @brief RTC Initialization Function
+  * @param None
+  * @retval None
   */
 static void MX_RTC_Init(void)
 {
-    RTC_TimeTypeDef sTime = {0};
-    RTC_DateTypeDef sDate = {0};
 
-    // Configure RTC settings
-    hrtc.Instance = RTC;
-    hrtc.Init.HourFormat = RTC_HOURFORMAT_24;
-    hrtc.Init.AsynchPrediv = 127; // LSE clock (32.768 kHz) divided to 1 Hz
-    hrtc.Init.SynchPrediv = 255;
-    hrtc.Init.OutPut = RTC_OUTPUT_DISABLE; // No output pin
-    hrtc.Init.OutPutRemap = RTC_OUTPUT_REMAP_NONE;
-    hrtc.Init.OutPutPolarity = RTC_OUTPUT_POLARITY_HIGH;
-    hrtc.Init.OutPutType = RTC_OUTPUT_TYPE_OPENDRAIN;
-    if (HAL_RTC_Init(&hrtc) != HAL_OK)
-    {
-        Error_Handler();
-    }
+  /* USER CODE BEGIN RTC_Init 0 */
 
-    // Set initial time to 00:00:00
-    sTime.Hours = 0x0;
-    sTime.Minutes = 0x0;
-    sTime.Seconds = 0x0;
-    sTime.DayLightSaving = RTC_DAYLIGHTSAVING_NONE;
-    sTime.StoreOperation = RTC_STOREOPERATION_RESET;
-    if (HAL_RTC_SetTime(&hrtc, &sTime, RTC_FORMAT_BCD) != HAL_OK)
-    {
-        Error_Handler();
-    }
-    // Set initial date to January 1st, 2000
-    sDate.WeekDay = RTC_WEEKDAY_MONDAY;
-    sDate.Month = RTC_MONTH_JANUARY;
-    sDate.Date = 0x1;
-    sDate.Year = 0x0;
+  /* USER CODE END RTC_Init 0 */
 
-    if (HAL_RTC_SetDate(&hrtc, &sDate, RTC_FORMAT_BCD) != HAL_OK)
-    {
-        Error_Handler();
-    }
+  RTC_TimeTypeDef sTime = {0};
+  RTC_DateTypeDef sDate = {0};
 
-    // Enable timestamping (not used in this implementation)
-    if (HAL_RTCEx_SetTimeStamp(&hrtc, RTC_TIMESTAMPEDGE_RISING, RTC_TIMESTAMPPIN_DEFAULT) != HAL_OK)
-    {
-        Error_Handler();
-    }
-}
+  /* USER CODE BEGIN RTC_Init 1 */
 
-/**
-  * @brief  Initializes the TIM4 peripheral for PWM control of heaters.
-  * @retval None (configures TIM4 peripheral).
-  * @note   - Configures TIM4 for PWM mode with a frequency of 100 Hz (8 MHz / (79+1) / (999+1)).
-  *         - Uses channels 3 and 4 for two heaters, initially set to 0% duty cycle.
-  *         - PWM resolution is 1000 steps (0-999), providing fine control over heater power.
-  * @context Called during system startup in `main` to initialize TIM4, which is used to control
-  *          heaters via PWM in the BMS. Temperature regulation is critical for battery safety in a
-  *          CubeSat’s extreme thermal environment.
-  * @integration The STM32’s TIM4 peripheral generates PWM signals for heater control, driven by the
-  *              PID controller (`PID_Control`). The timer integrates with GPIO pins mapped to the
-  *              heaters, as seen in the schematic (e.g., HEATER1, HEATER2).
-  * @debug  - If PWM does not work, check the timer frequency calculation and ensure the correct pins
-  *           are mapped to TIM4 channels 3 and 4.
-  *         - Verify that `HAL_TIM_PWM_MspInit` correctly configures the GPIO pins for PWM output.
-  *         - Use an oscilloscope to confirm PWM signal output on the heater pins.
+  /* USER CODE END RTC_Init 1 */
+
+  /** Initialize RTC Only
   */
-static void MX_TIM4_Init(void)
-{
-    TIM_MasterConfigTypeDef sMasterConfig = {0};
-    TIM_OC_InitTypeDef sConfigOC = {0};
+  hrtc.Instance = RTC;
+  hrtc.Init.HourFormat = RTC_HOURFORMAT_24;
+  hrtc.Init.AsynchPrediv = 127;
+  hrtc.Init.SynchPrediv = 255;
+  hrtc.Init.OutPut = RTC_OUTPUT_DISABLE;
+  hrtc.Init.OutPutRemap = RTC_OUTPUT_REMAP_NONE;
+  hrtc.Init.OutPutPolarity = RTC_OUTPUT_POLARITY_HIGH;
+  hrtc.Init.OutPutType = RTC_OUTPUT_TYPE_OPENDRAIN;
+  if (HAL_RTC_Init(&hrtc) != HAL_OK)
+  {
+    Error_Handler();
+  }
 
-    // Configure TIM4 base settings
-    htim4.Instance = TIM4;
-    htim4.Init.Prescaler = 79; // Prescaler = 80 (0-79), divides 8 MHz to 100 kHz
-    htim4.Init.CounterMode = TIM_COUNTERMODE_UP;
-    htim4.Init.Period = 999; // Period = 1000 (0-999), divides 100 kHz to 100 Hz
-    htim4.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-    htim4.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
-    if (HAL_TIM_PWM_Init(&htim4) != HAL_OK)
-    {
-        Error_Handler();
-    }
-    // Configure master mode (not used for PWM)
-    sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
-    sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
-    if (HAL_TIMEx_MasterConfigSynchronization(&htim4, &sMasterConfig) != HAL_OK)
-    {
-        Error_Handler();
-    }
-    // Configure PWM channels 3 and 4
-    sConfigOC.OCMode = TIM_OCMODE_PWM1; // PWM mode 1 (active high)
-    sConfigOC.Pulse = 0; // Initial duty cycle 0%
-    sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
-    sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
-    if (HAL_TIM_PWM_ConfigChannel(&htim4, &sConfigOC, TIM_CHANNEL_3) != HAL_OK)
-    {
-        Error_Handler();
-    }
-    if (HAL_TIM_PWM_ConfigChannel(&htim4, &sConfigOC, TIM_CHANNEL_4) != HAL_OK)
-    {
-        Error_Handler();
-    }
-    /* USER CODE BEGIN TIM4_Init 2 */
-    HAL_TIM_PWM_MspInit(&htim4); // Initialize GPIO for PWM pins
-    /* USER CODE END TIM4_Init 2 */
+  /* USER CODE BEGIN Check_RTC_BKUP */
+
+  /* USER CODE END Check_RTC_BKUP */
+
+  /** Initialize RTC and set the Time and Date
+  */
+  sTime.Hours = 0x0;
+  sTime.Minutes = 0x0;
+  sTime.Seconds = 0x0;
+  sTime.DayLightSaving = RTC_DAYLIGHTSAVING_NONE;
+  sTime.StoreOperation = RTC_STOREOPERATION_RESET;
+  if (HAL_RTC_SetTime(&hrtc, &sTime, RTC_FORMAT_BCD) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sDate.WeekDay = RTC_WEEKDAY_MONDAY;
+  sDate.Month = RTC_MONTH_JANUARY;
+  sDate.Date = 0x1;
+  sDate.Year = 0x0;
+
+  if (HAL_RTC_SetDate(&hrtc, &sDate, RTC_FORMAT_BCD) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Enable the TimeStamp
+  */
+  if (HAL_RTCEx_SetTimeStamp(&hrtc, RTC_TIMESTAMPEDGE_RISING, RTC_TIMESTAMPPIN_DEFAULT) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN RTC_Init 2 */
+
+  /* USER CODE END RTC_Init 2 */
+
 }
 
 /**
-  * @brief  Initializes the USART1 peripheral for logging over RS485.
-  * @retval None (configures USART1 peripheral).
-  * @note   - Configures USART1 for 115200 baud, 8 data bits, no parity, 1 stop bit (8N1).
-  *         - Enables both transmit and receive modes for RS485 communication.
-  *         - No hardware flow control or advanced features are used for simplicity.
-  * @context Called during system startup in `main` to initialize USART1, which is used for sending
-  *          logs to the OBC via RS485. Logging is essential for diagnostics in a CubeSat, where
-  *          direct debugging is not possible.
-  * @integration The STM32’s USART1 peripheral is used for RS485 communication, transmitting logs as
-  *              ASCII strings (`Log_Read_All`). The RS485 bus requires manual DE pin control, which
-  *              is not shown here but assumed to be handled in `Log_Read_All`.
-  * @debug  - If logs are not received by the OBC, check the baud rate, RS485 bus termination, and DE
-  *           pin control.
-  *         - Ensure the RX pin is correctly configured to receive responses if needed (though not used here).
-  *         - Use a logic analyzer to capture RS485 traffic for debugging.
+  * @brief USART1 Initialization Function
+  * @param None
+  * @retval None
   */
 static void MX_USART1_UART_Init(void)
 {
-    huart1.Instance = USART1;
-    huart1.Init.BaudRate = 115200;
-    huart1.Init.WordLength = UART_WORDLENGTH_8B;
-    huart1.Init.StopBits = UART_STOPBITS_1;
-    huart1.Init.Parity = UART_PARITY_NONE;
-    huart1.Init.Mode = UART_MODE_TX_RX;
-    huart1.Init.HwFlowCtl = UART_HWCONTROL_NONE;
-    huart1.Init.OverSampling = UART_OVERSAMPLING_16;
-    huart1.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
-    huart1.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
-    if (HAL_UART_Init(&huart1) != HAL_OK)
-    {
-        Error_Handler();
-    }
+
+  /* USER CODE BEGIN USART1_Init 0 */
+
+  /* USER CODE END USART1_Init 0 */
+
+  /* USER CODE BEGIN USART1_Init 1 */
+
+  /* USER CODE END USART1_Init 1 */
+  huart1.Instance = USART1;
+  huart1.Init.BaudRate = 115200;
+  huart1.Init.WordLength = UART_WORDLENGTH_8B;
+  huart1.Init.StopBits = UART_STOPBITS_1;
+  huart1.Init.Parity = UART_PARITY_NONE;
+  huart1.Init.Mode = UART_MODE_TX_RX;
+  huart1.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  huart1.Init.OverSampling = UART_OVERSAMPLING_16;
+  huart1.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
+  huart1.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
+  if (HAL_UART_Init(&huart1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN USART1_Init 2 */
+
+  /* USER CODE END USART1_Init 2 */
+
 }
 
 /**
-  * @brief  Initializes the USART2 peripheral for SSP communication with the OBC over RS485.
-  * @retval None (configures USART2 peripheral).
-  * @note   - Configures USART2 for 115200 baud, 8N1, similar to USART1.
-  *         - Enables both transmit and receive modes for half-duplex RS485 communication.
-  *         - Manually controls the DE pin (RS4852_DE) for transmit/receive switching.
-  * @context Called during system startup in `main` to initialize USART2, which is used for SSP
-  *          communication with the OBC (`SSP_TransmitFrame`, `SSP_ReceiveFrame`). SSP is the primary
-  *          protocol for BMS-OBC interaction in a CubeSat.
-  * @integration The STM32’s USART2 peripheral handles SSP communication, with the DE pin controlled
-  *              via GPIO to manage half-duplex operation. SSP frames are sent and received using
-  *              `ssp.c` functions, ensuring reliable command and telemetry exchange.
-  * @debug  - If SSP communication fails, check the baud rate, DE pin toggling, and RS485 bus setup.
-  *         - Ensure the GPIO pin (RS4852_DE) is correctly mapped and initialized.
-  *         - Use a logic analyzer to verify SSP frame timing and DE signal behavior.
+  * @brief USART2 Initialization Function
+  * @param None
+  * @retval None
   */
 static void MX_USART2_Init(void)
 {
-    husart2.Instance = USART2;
-    husart2.Init.BaudRate = 115200;
-    husart2.Init.WordLength = USART_WORDLENGTH_8B;
-    husart2.Init.StopBits = USART_STOPBITS_1;
-    husart2.Init.Parity = USART_PARITY_NONE;
-    husart2.Init.Mode = USART_MODE_TX_RX;
-    husart2.Init.CLKPolarity = USART_POLARITY_LOW;
-    husart2.Init.CLKPhase = USART_PHASE_1EDGE;
-    husart2.Init.CLKLastBit = USART_LASTBIT_DISABLE;
-    if (HAL_USART_Init(&husart2) != HAL_OK)
-    {
-        Error_Handler();
-    }
-    // Initialize DE pin to receive mode (low)
-    HAL_GPIO_WritePin(RS4852_DE_GPIO_Port, RS4852_DE_Pin, GPIO_PIN_RESET);
+
+  /* USER CODE BEGIN USART2_Init 0 */
+
+  /* USER CODE END USART2_Init 0 */
+
+  /* USER CODE BEGIN USART2_Init 1 */
+
+  /* USER CODE END USART2_Init 1 */
+  husart2.Instance = USART2;
+  husart2.Init.BaudRate = 115200;
+  husart2.Init.WordLength = USART_WORDLENGTH_8B;
+  husart2.Init.StopBits = USART_STOPBITS_1;
+  husart2.Init.Parity = USART_PARITY_NONE;
+  husart2.Init.Mode = USART_MODE_TX_RX;
+  husart2.Init.CLKPolarity = USART_POLARITY_LOW;
+  husart2.Init.CLKPhase = USART_PHASE_1EDGE;
+  husart2.Init.CLKLastBit = USART_LASTBIT_DISABLE;
+  if (HAL_USART_Init(&husart2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN USART2_Init 2 */
+
+  /* USER CODE END USART2_Init 2 */
+
 }
 
 /**
-  * @brief  Initializes GPIO pins for the BMS.
-  * @retval None (configures GPIO pins).
-  * @note   - Configures the LED pin for status indication (e.g., blinking during startup).
-  *         - Configures the RS485 DE pin (RS4852_DE) for transmit/receive control.
-  *         - Configures additional pins for BQ76920 control (BOOT, ALERT) and monitoring.
-  *         - Enables clocks for relevant GPIO ports (A, B, C, H).
-  * @context Called during system startup in `main` to initialize GPIO pins, which are used for
-  *          controlling external devices (e.g., RS485 DE, heaters) and indicating system status
-  *          (LED) in a CubeSat.
-  * @integration The STM32’s GPIO pins interface with external hardware, such as the RS485 transceiver
-  *              (DE pin), BQ76920 ICs (BOOT, ALERT), and an LED for visual feedback. The pins are
-  *              configured for low-speed operation to minimize power consumption.
-  * @debug  - If GPIO pins do not function, check the pin mapping in the STM32CubeMX configuration
-  *           and ensure clocks are enabled for all used ports.
-  *         - Verify that pins are not conflicting with other peripherals (e.g., I2C, UART).
-  *         - Use a multimeter to confirm pin states (e.g., DE pin toggling, LED blinking).
+  * @brief GPIO Initialization Function
+  * @param None
+  * @retval None
   */
 static void MX_GPIO_Init(void)
 {
-    GPIO_InitTypeDef GPIO_InitStruct = {0};
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
+  /* USER CODE BEGIN MX_GPIO_Init_1 */
 
-    // Enable clocks for GPIO ports
-    __HAL_RCC_GPIOC_CLK_ENABLE();
-    __HAL_RCC_GPIOH_CLK_ENABLE();
-    __HAL_RCC_GPIOA_CLK_ENABLE();
-    __HAL_RCC_GPIOB_CLK_ENABLE();
+  /* USER CODE END MX_GPIO_Init_1 */
 
-    // Initialize LED and RS485 DE pins to low
-    HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(RS4852_DE_GPIO_Port, RS4852_DE_Pin, GPIO_PIN_RESET);
+  /* GPIO Ports Clock Enable */
+  __HAL_RCC_GPIOC_CLK_ENABLE();
+  __HAL_RCC_GPIOH_CLK_ENABLE();
+  __HAL_RCC_GPIOA_CLK_ENABLE();
+  __HAL_RCC_GPIOB_CLK_ENABLE();
 
-    // Configure LED pin as output
-    GPIO_InitStruct.Pin = LED_Pin;
-    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-    GPIO_InitStruct.Pull = GPIO_NOPULL;
-    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-    HAL_GPIO_Init(LED_GPIO_Port, &GPIO_InitStruct);
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_RESET);
 
-    // Configure RS485 DE pin as output
-    GPIO_InitStruct.Pin = RS4852_DE_Pin;
-    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-    GPIO_InitStruct.Pull = GPIO_NOPULL;
-    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-    HAL_GPIO_Init(RS4852_DE_GPIO_Port, &GPIO_InitStruct);
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(RS4852_DE_GPIO_Port, RS4852_DE_Pin, GPIO_PIN_RESET);
 
-    // Configure GPIOB Pin 4 as output (likely BQ76920 BOOT pin for IC1)
-    GPIO_InitStruct.Pin = GPIO_PIN_4;
-    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-    GPIO_InitStruct.Pull = GPIO_NOPULL;
-    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-    HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOB, HEATER2_Pin|HEATER1_Pin, GPIO_PIN_RESET);
 
-    // Configure GPIOC Pin 7 as output (likely BQ76920 BOOT pin for IC2)
-    GPIO_InitStruct.Pin = GPIO_PIN_7;
-    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-    GPIO_InitStruct.Pull = GPIO_NOPULL;
-    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-    HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+  /*Configure GPIO pin : LED_Pin */
+  GPIO_InitStruct.Pin = LED_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(LED_GPIO_Port, &GPIO_InitStruct);
 
-    // Configure GPIOB Pin 5 as input with pull-up (likely BQ76920 ALERT pin for IC1)
-    GPIO_InitStruct.Pin = GPIO_PIN_5;
-    GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-    GPIO_InitStruct.Pull = GPIO_PULLUP;
-    HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+  /*Configure GPIO pin : RS4852_DE_Pin */
+  GPIO_InitStruct.Pin = RS4852_DE_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(RS4852_DE_GPIO_Port, &GPIO_InitStruct);
 
-    // Configure GPIOA Pin 12 as input with pull-up (likely BQ76920 ALERT pin for IC2)
-    GPIO_InitStruct.Pin = GPIO_PIN_12;
-    GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-    GPIO_InitStruct.Pull = GPIO_PULLUP;
-    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+  /*Configure GPIO pin : BOOT2_Pin */
+  GPIO_InitStruct.Pin = BOOT2_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(BOOT2_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : ALERT2_Pin */
+  GPIO_InitStruct.Pin = ALERT2_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(ALERT2_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : BOOT_Pin ALERT_Pin */
+  GPIO_InitStruct.Pin = BOOT_Pin|ALERT_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : HEATER2_Pin HEATER1_Pin */
+  GPIO_InitStruct.Pin = HEATER2_Pin|HEATER1_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+  /* USER CODE BEGIN MX_GPIO_Init_2 */
+
+  /* USER CODE END MX_GPIO_Init_2 */
 }
 
 /* USER CODE BEGIN 4 */
 /* USER CODE END 4 */
 
 /**
-  * @brief  Error handler function for unrecoverable errors.
-  * @retval None (enters infinite loop with LED blinking).
-  * @note   - Disables interrupts to prevent further system activity.
-  *         - Blinks the LED at 200 ms intervals to indicate a critical failure.
-  * @context Called when a critical error occurs during initialization or operation (e.g., peripheral
-  *          initialization failure, I2C communication error). Provides visual feedback for debugging
-  *          in a CubeSat where direct access is not possible.
-  * @integration The STM32 uses this function as a last resort to indicate system failure, leveraging
-  *              the LED GPIO for visual feedback. It ensures the system halts safely without causing
-  *              further damage.
-  * @debug  - Trace the call to `Error_Handler` by checking logs (`Log_Error`) to identify the root cause.
-  *         - Use a debugger to step through the code and identify the failing operation (e.g., I2C init).
-  *         - The blinking LED pattern can be used to confirm the system has entered this state.
+  * @brief  This function is executed in case of error occurrence.
+  * @retval None
   */
 void Error_Handler(void)
 {
-    __disable_irq(); // Disable all interrupts to halt system activity
-    while (1)
-    {
-        HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
-        HAL_Delay(BLINK_INTERVAL); // 200 ms blink interval
-    }
+  /* USER CODE BEGIN Error_Handler_Debug */
+  /* User can add his own implementation to report the HAL error return state */
+  __disable_irq();
+  while (1)
+  {
+  }
+  /* USER CODE END Error_Handler_Debug */
 }
 
-#ifdef USE_FULL_ASSERT
+#ifdef  USE_FULL_ASSERT
 /**
-  * @brief  Reports the name of the source file and line number where an assert_param error occurs.
-  * @param  file: Pointer to the source file name.
-  * @param  line: Line number where the assert_param error occurred.
-  * @retval None (intended for user implementation).
-  * @note   - Currently a placeholder; user can add custom error reporting (e.g., logging to UART).
-  * @context Called by the HAL library when an `assert_param` check fails, typically during peripheral
-  *          initialization or parameter validation. Useful for debugging in a CubeSat development environment.
-  * @integration The STM32 HAL library provides this hook for custom error handling, which can be extended
-  *              to log assert failures to flash or UART for diagnostics.
-  * @debug  - Implement custom logging (e.g., to UART1) to capture file and line number for debugging.
-  *         - Use this function to trace parameter validation issues in HAL functions.
+  * @brief  Reports the name of the source file and the source line number
+  *         where the assert_param error has occurred.
+  * @param  file: pointer to the source file name
+  * @param  line: assert_param error line source number
+  * @retval None
   */
 void assert_failed(uint8_t *file, uint32_t line)
 {
-    /* User can add his own implementation to report the file name and line number,
-       ex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
+  /* USER CODE BEGIN 6 */
+  /* User can add his own implementation to report the file name and line number,
+     ex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
+  /* USER CODE END 6 */
 }
 #endif /* USE_FULL_ASSERT */

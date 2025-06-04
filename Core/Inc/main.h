@@ -35,16 +35,6 @@ extern "C" {
 #include <stdarg.h> // For variable arguments in Log_Error
 /* USER CODE END Includes */
 
-/* Private variables ---------------------------------------------------------*/
-extern I2C_HandleTypeDef hi2c1;
-extern I2C_HandleTypeDef hi2c2;
-extern I2C_HandleTypeDef hi2c3;
-extern RTC_HandleTypeDef hrtc;
-extern TIM_HandleTypeDef htim4;
-extern UART_HandleTypeDef huart1;
-extern USART_HandleTypeDef husart2;
-extern ADC_HandleTypeDef hadc1; // Add this line
-
 /* Exported types ------------------------------------------------------------*/
 /* USER CODE BEGIN ET */
 typedef enum {
@@ -123,20 +113,24 @@ void Log_Error(const char *format, ...);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
-/* Private defines -----------------------------------------------------------*/
-#define BOOT2_Pin GPIO_PIN_13
-#define BOOT2_GPIO_Port GPIOC
-#define ALERT2_Pin GPIO_PIN_14
-#define ALERT2_GPIO_Port GPIOC
-#define LED_Pin GPIO_PIN_0
-#define LED_GPIO_Port GPIOA
+#define LED_Pin GPIO_PIN_3
+#define LED_GPIO_Port GPIOC
 #define RS4852_DE_Pin GPIO_PIN_1
 #define RS4852_DE_GPIO_Port GPIOA
-#define USART2_TX_Pin GPIO_PIN_2 // Added definition for USART2 TX pin
-#define BOOT_Pin GPIO_PIN_2
+#define USART2_TX_Pin GPIO_PIN_2
+#define USART2_TX_GPIO_Port GPIOA
+#define BOOT2_Pin GPIO_PIN_7
+#define BOOT2_GPIO_Port GPIOC
+#define ALERT2_Pin GPIO_PIN_12
+#define ALERT2_GPIO_Port GPIOA
+#define BOOT_Pin GPIO_PIN_4
 #define BOOT_GPIO_Port GPIOB
-#define ALERT_Pin GPIO_PIN_10
+#define ALERT_Pin GPIO_PIN_5
 #define ALERT_GPIO_Port GPIOB
+#define HEATER2_Pin GPIO_PIN_8
+#define HEATER2_GPIO_Port GPIOB
+#define HEATER1_Pin GPIO_PIN_9
+#define HEATER1_GPIO_Port GPIOB
 
 /* USER CODE BEGIN Private defines */
 

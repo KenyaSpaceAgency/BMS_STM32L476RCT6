@@ -22,6 +22,49 @@
 #include "main.h"
 
 /**
+  * @brief  Initializes the TMP100 temperature sensors on I2C1 and I2C2.
+  * @param  hi2c1: Pointer to the I2C handle for NTC-1 (I2C1 on STM32).
+  * @param  hi2c2: Pointer to the I2C handle for NTC-2 (I2C2 on STM32).
+  * @retval HAL_StatusTypeDef: HAL_OK on success, HAL_ERROR on I2C communication failure.
+  * @note   - Configures both sensors for 12-bit resolution (0.0625°C, 320ms conversion time).
+  *         - Sets fault queue to 2 consecutive faults to reduce noise-induced false alerts.
+  *         - Uses continuous conversion mode (SD=0) and comparator mode (TM=0).
+  *         - Verifies configuration by reading back the register.
+  * @context Called during system startup in `main.c` to ensure sensors are properly configured
+  *          before temperature readings begin.
+  */
+HAL_StatusTypeDef Temperature_Init(I2C_HandleTypeDef *hi2c1, I2C_HandleTypeDef *hi2c2) {
+    HAL_StatusTypeDef status;
+    uint8_t config_value = 0;
+    uint8_t read_config = 0;
+
+    // Configure for 12-bit resolution (R1=1, R0=1), fault queue=2 (F1=0, F0=1)
+    // SD=0 (continuous), TM=0 (comparator), POL=0 (active low), OS=0 (continuous)
+    config_value |= (1 << TMP100_R1) | (1 << TMP100_R0); // 12-bit resolution
+    config_value |= (1 << TMP100_F0); // Fault queue = 2
+
+    // Configure NTC-1 (I2C1, address 0x48)
+    uint16_t i2c_addr_1 = (TMP100_I2C_ADDRESS_1 << 1);
+    status = HAL_I2C_Mem_Write(hi2c1, i2c_addr_1, TMP100_CONFIG_REG, 1, &config_value, 1, HAL_MAX_DELAY);
+    if (status != HAL_OK) return status;
+
+    // Verify configuration for NTC-1
+    status = HAL_I2C_Mem_Read(hi2c1, i2c_addr_1, TMP100_CONFIG_REG, 1, &read_config, 1, HAL_MAX_DELAY);
+    if (status != HAL_OK || read_config != config_value) return HAL_ERROR;
+
+    // Configure NTC-2 (I2C2, address 0x49)
+    uint16_t i2c_addr_2 = (TMP100_I2C_ADDRESS_2 << 1);
+    status = HAL_I2C_Mem_Write(hi2c2, i2c_addr_2, TMP100_CONFIG_REG, 1, &config_value, 1, HAL_MAX_DELAY);
+    if (status != HAL_OK) return status;
+
+    // Verify configuration for NTC-2
+    status = HAL_I2C_Mem_Read(hi2c2, i2c_addr_2, TMP100_CONFIG_REG, 1, &read_config, 1, HAL_MAX_DELAY);
+    if (status != HAL_OK || read_config != config_value) return HAL_ERROR;
+
+    return HAL_OK;
+}
+
+/**
   * @brief  Reads temperature data from two TMP100 sensors (NTC-1 and NTC-2) over I2C.
   * @param  hi2c1: Pointer to the I2C handle for NTC-1 (I2C1 on STM32).
   * @param  hi2c2: Pointer to the I2C handle for NTC-2 (I2C2 on STM32).
@@ -44,8 +87,7 @@
   *         - If temperatures are incorrect, verify the conversion formula and sign bit handling.
   *         - Use an I2C debugger or oscilloscope to capture bus transactions for troubleshooting.
   */
-HAL_StatusTypeDef Temperature_Read(I2C_HandleTypeDef *hi2c1, I2C_HandleTypeDef *hi2c2, int16_t *temperature_1, int16_t *temperature_2)
-{
+HAL_StatusTypeDef Temperature_Read(I2C_HandleTypeDef *hi2c1, I2C_HandleTypeDef *hi2c2, int16_t *temperature_1, int16_t *temperature_2) {
     uint8_t data[2]; // Buffer for 2-byte temperature data from TMP100
     HAL_StatusTypeDef status;
 
@@ -56,7 +98,6 @@ HAL_StatusTypeDef Temperature_Read(I2C_HandleTypeDef *hi2c1, I2C_HandleTypeDef *
     if (status != HAL_OK) {
         return status; // Return early on I2C failure
     }
-	// Check if the read operation was successful
     // Convert temperature for NTC-1
     // Combine bytes into a 12-bit value: data[0] (MSB) and 4 bits of data[1] (LSB)
     int16_t temp_raw = (data[0] << 4) | (data[1] >> 4);

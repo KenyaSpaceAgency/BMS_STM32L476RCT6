@@ -1,2 +1,2 @@
-../Core/Src/pid/pid.c:24:6:PID_Init	4	static
-../Core/Src/pid/pid.c:36:6:PID_Control	96	static
+../Core/Src/pid/pid.c:25:6:PID_Init	8	static
+../Core/Src/pid/pid.c:46:6:PID_Control	128	static
