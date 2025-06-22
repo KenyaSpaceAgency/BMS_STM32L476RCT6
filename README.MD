@@ -3,7 +3,7 @@
 ## Project Overview
 
 This project implements a Battery Management System (BMS) for a CubeSat using the **STM32L476RCT6** microcontroller, configured via **STM32CubeIDE**. It manages a 4S2P lithium-ion battery pack (4 cells in series, 2 in parallel per group) using two **BQ76920** battery monitor ICs for redundancy. The firmware ensures safe operation, efficient power management, and reliable communication with the On-Board Computer (OBC) via the Simple Serial Protocol (SSP) over RS485. Key features include battery monitoring, protection, temperature control, and firmware updates.
-
+![STM32L476RCT6_BMS flowchart](/images/flowchart.png)
 ### Hardware Reference
 - **Microcontroller**: STM32L476RCT6
 - **Battery Monitor ICs**: 2x BQ76920 (I2C1 and I2C2 for redundancy)

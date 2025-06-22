@@ -1500,7 +1500,7 @@ S
 
     // Initialize Kalman filters for SOC and SOH estimation
     KalmanFilter_Init(&soc_kf, INITIAL_SOC, 1.0, 0.01, 1.0);
-        KalmanFilter_Init(&soh_kf, INITIAL_SOH, 1.0, 0.01, 1.0);
+    KalmanFilter_Init(&soh_kf, INITIAL_SOH, 1.0, 0.01, 1.0);
     // Initialize PID controller for heater regulation
     PID_Init();
 
