@@ -356,7 +356,7 @@ The BMS uses I2C to communicate with BQ76920 ICs and TMP100 temperature sensors 
 
 GPIO pins are configured for status indication, BQ76920 control, RS485 driver enable, and heater control.
 
-<<<<<<< HEAD
+
 #### 3.4 PWM for Heaters(THIS IS WRONG I NEED TO WORK ON THIS)
 - **TIM4**:
   - PB8: TIM4_CH3 (HEATER2)
