@@ -678,15 +678,6 @@ After completing the steps above, verify the following in STM32CubeIDE:
 - **ssp.c/h**: Simple Serial Protocol (SSP) for RS485 communication with the OBC.
 - **crc16.c/h**: CRC16 implementation for firmware update validation (assumed, as `CalculateCRC16` is referenced).
 
-### Memory Layout
-- **Bootloader**: 0x08000000 - 0x08003FFF (16 KB)
-- **Application**: 0x08004000 - 0x0807F7FF (238 KB)
-- **Backup Image**: 0x08040000 - 0x0807F7FF (optional, 192 KB)
-- **Log Storage**: 0x08080000 onwards (size depends on `NUM_LOG_ENTRIES` and `LOG_ENTRY_SIZE`)
-- **Flags**:
-  - Next Slot: `NEXT_SLOT_ADDR` (0x0807F800)
-  - Firmware Update Flag: `FIRMWARE_UPDATE_FLAG_ADDR` (0x0807F810)
-  - App Validity Flag: `APP_VALIDITY_FLAG_ADDR` (0x0807F820)
 
 ### Main Loop Operations
 The main loop in `main.c` runs every `LOOP_TIME` (assumed 0.1s, defined in `main.h`) and performs:
