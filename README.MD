@@ -678,15 +678,6 @@ After completing the steps above, verify the following in STM32CubeIDE:
 - **ssp.c/h**: Simple Serial Protocol (SSP) for RS485 communication with the OBC.
 - **crc16.c/h**: CRC16 implementation for firmware update validation (assumed, as `CalculateCRC16` is referenced).
 
-### Memory Layout
-- **Bootloader**: 0x08000000 - 0x08003FFF (16 KB)
-- **Application**: 0x08004000 - 0x0807F7FF (238 KB)
-- **Backup Image**: 0x08040000 - 0x0807F7FF (optional, 192 KB)
-- **Log Storage**: 0x08080000 onwards (size depends on `NUM_LOG_ENTRIES` and `LOG_ENTRY_SIZE`)
-- **Flags**:
-  - Next Slot: `NEXT_SLOT_ADDR` (0x0807F800)
-  - Firmware Update Flag: `FIRMWARE_UPDATE_FLAG_ADDR` (0x0807F810)
-  - App Validity Flag: `APP_VALIDITY_FLAG_ADDR` (0x0807F820)
 
 ### Main Loop Operations
 The main loop in `main.c` runs every `LOOP_TIME` (assumed 0.1s, defined in `main.h`) and performs:
@@ -858,6 +849,66 @@ The firmware controls two heaters to maintain battery temperature within a safe 
 - **Power Optimization**: Implement low-power modes for `MODE_SLEEP` to extend battery life.
 - **Power Lines Control**: Implement hardware control for `power_lines` array (e.g., additional TPS22810 switches).
 
+
+## Expected Telemetry Output
+The telemetry output sent to the OBC via RS485 (USART2) every 5 seconds includes the following data:
+ *   group\_voltages\_1\[\]: Voltage readings for the 4 cells monitored by the first BQ76920 IC (mV, array of 4 values).
+    
+*   group\_voltages\_2\[\]: Voltage readings for the 4 cells monitored by the second BQ76920 IC (mV, array of 4 values, for redundancy).
+    
+*   pack\_current\_1: Pack current measured by the first BQ76920 IC (mA).
+    
+*   pack\_current\_2: Pack current measured by the second BQ76920 IC (mA, for redundancy).
+    
+*   temperature\_1: Temperature reading from the first NTC sensor (°C).
+    
+*   temperature\_2: Temperature reading from the second NTC sensor (°C).
+    
+*   pcb\_temperature: PCB temperature measured by the STM32’s internal sensor (°C).
+    
+*   soc: State of Charge of the battery (percentage, 0-100, estimated via Kalman filtering).
+    
+*   soh: State of Health of the battery (percentage, 0-100, estimated via Kalman filtering).
+    
+*   coulomb\_count: Cumulative charge for coulomb counting (mAh).
+    
+*   initial\_capacity: Initial capacity of the battery pack (mAh).
+    
+*   actual\_capacity: Actual capacity of the battery pack (mAh, updated based on SOC).
+    
+*   bms\_mode: Current BMS operating mode (e.g., charging, discharging, sleep, fault).
+    
+*   charge\_enabled: Charge enable flag (0 = disabled, 1 = enabled).
+    
+*   discharge\_enabled: Discharge enable flag (0 = disabled, 1 = enabled).
+    
+*   charge\_immediately: Immediate charge flag (0 = no, 1 = yes).
+    
+*   bms\_online: BMS online status (0 = offline, 1 = online).
+    
+*   error\_flags: Error flags for various fault conditions (e.g., overvoltage, overtemperature, 32-bit integer).
+    
+*   charge\_cycle\_count: Number of completed charge cycles (count).
+    
+*   total\_charge\_time: Total time spent charging (seconds).
+    
+*   total\_discharge\_time: Total time spent discharging (seconds).
+    
+*   total\_operating\_time: Total operating time of the BMS (seconds).
+    
+*   charge\_start\_time: Timestamp when charging starts (milliseconds).
+    
+*   in\_cv\_mode: Flag indicating if in Constant Voltage mode during charging (0 = CC, 1 = CV).
+    
+*   mission\_termination\_enabled: Mission termination enable flag (0 = disabled, 1 = enabled, set by GCS).
+    
+*   balancing\_mask\_1: Balancing mask for the first BQ76920 IC (bit field).
+    
+*   balancing\_mask\_2: Balancing mask for the second BQ76920 IC (bit field).
+    
+*   balancing\_active: Cell balancing active status (0 = inactive, 1 = active).
+    
+*   power\_lines\[\]: State of 16 power lines (PWRL0-PWRL15, array of 0 = OFF, 1 = ON).
 
 
 
