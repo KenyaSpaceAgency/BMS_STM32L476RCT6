@@ -121,11 +121,11 @@ typedef struct {
 /* USER CODE END EM */
 
 /* Exported functions prototypes ---------------------------------------------*/
-HAL_StatusTypeDef SSP_ReceiveFrame(USART_HandleTypeDef *husart, uint8_t *buffer, uint16_t buffer_len, SSP_FrameTypeDef *frame);
-HAL_StatusTypeDef SSP_TransmitFrame(USART_HandleTypeDef *husart, uint8_t *buffer, uint16_t buffer_len);
+HAL_StatusTypeDef SSP_ReceiveFrame(UART_HandleTypeDef *huart, uint8_t *buffer, uint16_t buffer_len, SSP_FrameTypeDef *frame);
+HAL_StatusTypeDef SSP_TransmitFrame(UART_HandleTypeDef *huart, uint8_t *buffer, uint16_t buffer_len);
 void SSP_PackTelemetry(SSP_TelemetryTypeDef *telemetry, SSP_FrameTypeDef *frame);
 HAL_StatusTypeDef SSP_ConstructFrame(SSP_FrameTypeDef *frame, uint8_t *buffer, uint16_t *buffer_len);
-HAL_StatusTypeDef SSP_RequestTime(USART_HandleTypeDef *husart, SSP_TimeTypeDef *time);
+HAL_StatusTypeDef SSP_RequestTime(UART_HandleTypeDef *huart, SSP_TimeTypeDef *time);
 
 /* USER CODE BEGIN EFP */
 

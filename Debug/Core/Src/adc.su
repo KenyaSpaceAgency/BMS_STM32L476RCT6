@@ -1,1 +1,1 @@
-../Core/Src/adc.c:32:6:MX_ADC1_Init	32	static
+../Core/Src/adc.c:45:6:MX_ADC1_Init	48	static

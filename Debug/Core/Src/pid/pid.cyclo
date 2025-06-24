@@ -1,2 +1,4 @@
-../Core/Src/pid/pid.c:25:6:PID_Init	1
-../Core/Src/pid/pid.c:46:6:PID_Control	11
+../Core/Src/pid/pid.c:50:13:PowerSwitch_Init	1
+../Core/Src/pid/pid.c:67:13:PowerSwitch_Control	3
+../Core/Src/pid/pid.c:89:6:PID_Init	1
+../Core/Src/pid/pid.c:108:6:PID_Control	11

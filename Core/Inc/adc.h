@@ -18,8 +18,14 @@ extern "C" {
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 
+/* Exported types ------------------------------------------------------------*/
+/* Exported constants --------------------------------------------------------*/
+/* Exported macro ------------------------------------------------------------*/
 /* Exported functions prototypes ---------------------------------------------*/
 void MX_ADC1_Init(void);
+
+/* Exported variables ---------------------------------------------------------*/
+extern ADC_HandleTypeDef hadc1; // Declare as extern to use the handle defined in main.c
 
 #ifdef __cplusplus
 }

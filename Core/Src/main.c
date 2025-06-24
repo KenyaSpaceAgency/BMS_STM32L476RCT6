@@ -1,188 +1,162 @@
-/* USER CODE BEGIN Header */
-/**
-  ******************************************************************************
-  * @file           : main.c
-  * @brief          : Main program body for Battery Management System (BMS)
-  ******************************************************************************
-  * @attention
-  *
-  * Copyright (c) 2025 STMicroelectronics.
-  * All rights reserved.
-  *
-  * This software is licensed under terms that can be found in the LICENSE file
-  * in the root directory of this software component.
-  * If no LICENSE file comes with this software, it is provided AS-IS.
-  *
-  ******************************************************************************
-  * @brief  Implements the Battery Management System (BMS) for a CubeSat, managing battery monitoring,
-  *         charging, protection, and communication with the On-Board Computer (OBC).
-  * @note   - Runs on an STM32 microcontroller (e.g., STM32L4 series).
-  *         - Monitors a 4S2P lithium-ion battery pack using two BQ76920 ICs for redundancy.
-  *         - Communicates with the OBC via SSP (Simple Serial Protocol) over RS485.
-  *         - Includes features like coulomb counting, Kalman filtering for SOC/SOH, CC-CV charging,
-  *           cell balancing, temperature monitoring, and firmware updates.
-  * @context In a CubeSat, the BMS ensures reliable power management by monitoring battery health,
-  *          protecting against faults (e.g., overvoltage, overtemperature), controlling charging/discharging,
-  *          and communicating status to the OBC. This file is the core of the EPS (Electrical Power System),
-  *          integrating multiple subsystems for safe operation in space.
-  ******************************************************************************
-  */
-/* USER CODE END Header */
-/* Includes ------------------------------------------------------------------*/
+/* Role of main.c in the BMS Project:
+ * This file is the main control program for the BMS in a CubeSat, initializing hardware
+ * peripherals (ADC, I2C, UART, RTC) and managing the 4S2P lithium-ion battery pack using
+ * two BQ76920 ICs. It controls heaters via PID, detects faults, and communicates with the
+ * OBC via RS485 using SSP, while supporting firmware updates and logging.
+ */
+
+/* Importance of main.c in the BMS Project:
+ * - Orchestrates System: Coordinates battery monitoring, temperature control, fault
+ *   handling, and communication, ensuring cohesive BMS operation.
+ * - Ensures Safety: Detects faults like overvoltage or overtemperature, taking protective
+ *   actions to prevent battery damage.
+ * - Enhances Reliability: Manages redundancy between BQ76920 ICs and fault recovery,
+ *   critical for space applications.
+ * - Enables Diagnostics: Logs errors and telemetry, sent to the OBC via RS485, supporting
+ *   remote monitoring.
+ * - Optimizes Power: Controls charging, discharging, and heaters, improving battery
+ *   performance and longevity in the EPS.
+ */
+
+/* Objective of main.c in the BMS Project:
+ * The objective is to initialize and manage the BMS’s hardware and software, ensuring safe
+ * battery operation, fault handling, and communication with the OBC. It supports firmware
+ * updates and logging, contributing to the CubeSat’s mission reliability and EPS efficiency.
+ */
+
+/* Include STM32 HAL library for hardware control (UART, I2C, ADC, etc.) */
+#include "stm32l4xx_hal.h"
+/* Include standard I/O library for string formatting with sprintf */
+#include <stdio.h>
+/* Include main header file for BMS-specific definitions and structures */
 #include "main.h"
 
-/* Private includes ----------------------------------------------------------*/
-/* USER CODE BEGIN Includes */
+/* Define a placeholder for user-defined data types (not used here) */
+typedef void *placeholder_typedef; /* Placeholder for custom data types, unused */
+/* Define a placeholder for user-defined constants (not used here) */
+#define PLACEHOLDER_DEFINE 0 /* Placeholder for custom constants, unused */
+/* Define a placeholder for user-defined macros (not used here) */
+#define PLACEHOLDER_MACRO(x) (x) /* Placeholder for custom macros, unused */
 
-/* USER CODE END Includes */
-
-/* Private typedef -----------------------------------------------------------*/
-/* USER CODE BEGIN PTD */
-
-/* USER CODE END PTD */
-
-/* Private define ------------------------------------------------------------*/
-/* USER CODE BEGIN PD */
-
-/* USER CODE END PD */
-
-/* Private macro -------------------------------------------------------------*/
-/* USER CODE BEGIN PM */
-
-/* USER CODE END PM */
-
-/* Private variables ---------------------------------------------------------*/
+/* Declare handle for ADC1 to read internal temperature sensor */
 ADC_HandleTypeDef hadc1;
-
+/* Declare handle for I2C1 to communicate with first BQ76920 IC */
 I2C_HandleTypeDef hi2c1;
+/* Declare handle for I2C2 to communicate with second BQ76920 IC */
 I2C_HandleTypeDef hi2c2;
+/* Declare handle for I2C3 (unused in this code) */
 I2C_HandleTypeDef hi2c3;
-
+/* Declare handle for Real-Time Clock to track time */
 RTC_HandleTypeDef hrtc;
-
+/* Declare handle for USART1 for logging over RS485 */
 UART_HandleTypeDef huart1;
-USART_HandleTypeDef husart2;
+/* Declare handle for USART2 for SSP communication with OBC */
+UART_HandleTypeDef huart2;
 
-/* USER CODE BEGIN PV */
-/* @brief  Private variables for the BMS, storing state and configuration data.
- * @note   These variables are used to track battery status, BMS modes, and system state.
- * @context Declared as global to maintain state across functions in the BMS loop, reflecting
- *          the real-time monitoring and control requirements of a CubeSat EPS.
- */
-// Array to store voltage readings for the 4 cells monitored by the first BQ76920 IC (Cells 1-4)
+/* Declare array to store voltages of 4 cells from first BQ76920 (in mV) */
 uint16_t group_voltages_1[NUM_GROUPS_PER_IC];
-// Array to store voltage readings for the 4 cells monitored by the second BQ76920 IC (Cells 1-4, for redundancy)
+/* Declare array to store voltages of 4 cells from second BQ76920 (in mV) */
 uint16_t group_voltages_2[NUM_GROUPS_PER_IC];
-// Variable to store the pack current measured by the first BQ76920 IC (in mA)
+/* Declare variable for pack current from first BQ76920 (in mA) */
 int16_t pack_current_1;
-// Variable to store the pack current measured by the second BQ76920 IC (in mA)
+/* Declare variable for pack current from second BQ76920 (in mA) */
 int16_t pack_current_2;
-// Variable to store the temperature reading from the first NTC sensor (in °C)
+/* Declare variable for temperature from first NTC sensor (°C) */
 int16_t temperature_1;
-// Variable to store the temperature reading from the second NTC sensor (in °C)
+/* Declare variable for temperature from second NTC sensor (°C) */
 int16_t temperature_2;
-// Variable to store the PCB temperature measured by the STM32’s internal sensor (in °C)
+/* Declare variable for PCB temperature from STM32 sensor (°C) */
 int16_t pcb_temperature;
-// Variable to store the State of Charge (SOC) of the battery, initialized to a predefined value (in %)
+/* Declare variable for battery State of Charge (in percent) */
 float soc = INITIAL_SOC;
-// Variable to store the State of Health (SOH) of the battery, initialized to a predefined value (in %)
+/* Declare variable for battery State of Health (in percent) */
 float soh = INITIAL_SOH;
-// Kalman filter structure for SOC estimation, used to smooth noisy SOC measurements
+/* Declare structure for Kalman filter to smooth SOC estimates */
 KalmanFilter soc_kf;
-// Kalman filter structure for SOH estimation, used to smooth noisy SOH measurements
+/* Declare structure for Kalman filter to smooth SOH estimates */
 KalmanFilter soh_kf;
 
-// Static variable to track the next available slot for logging errors in flash memory
+/* Declare static variable for next log slot in flash memory */
 static uint32_t next_slot = 0;
-// Static buffer to store a single log entry before writing it to flash memory
+/* Declare static buffer for a single log entry */
 static uint8_t log_buffer[LOG_ENTRY_SIZE];
-
-// Static variable to track the cumulative charge (in mAh) for coulomb counting
+/* Declare static variable for cumulative charge (mAh) */
 static float coulomb_count;
-// Static variable to store the initial capacity of the battery pack (in mAh)
+/* Declare static variable for initial battery capacity (mAh) */
 static float initial_capacity;
-// Static variable to store the actual capacity of the battery pack, updated based on SOC (in mAh)
+/* Declare static variable for current battery capacity (mAh) */
 static float actual_capacity;
-
-// Static buffer for transmitting SSP frames to the OBC
+/* Declare static buffer for sending SSP frames */
 static uint8_t ssp_tx_buffer[SSP_MAX_FRAME_LEN];
-// Static buffer for receiving SSP frames from the OBC
+/* Declare static buffer for receiving SSP frames */
 static uint8_t ssp_rx_buffer[SSP_MAX_FRAME_LEN];
-
-// Static variable to store the current BMS operating mode (e.g., charging, discharging, sleep, fault)
+/* Declare static variable for current BMS mode */
 static BMS_ModeTypeDef bms_mode = MODE_DISCHARGING;
-// Static flag to enable or disable charging (0 = disabled, 1 = enabled)
-static uint8_t charge_enabled = 0;
-// Static flag to enable or disable discharging (0 = disabled, 1 = enabled), initialized to enabled
-static uint8_t discharge_enabled = 1;
-// Static flag to indicate if the battery should be charged immediately (e.g., when SOC is low)
+/* Declare static flag to enable/disable charging */
+static uint8_t charge_enabled __attribute__((used)) = 0; /* Flag to enable/disable charging */
+/* Declare static flag to enable/disable discharging */
+static uint8_t discharge_enabled __attribute__((used)) = 1; /* Flag to enable/disable discharging */
+/* Declare static flag for immediate charging need */
 static uint8_t charge_immediately = 0;
-// Static flag to indicate if the BMS is online and operational
+/* Declare static flag for BMS operational status */
 static uint8_t bms_online = 0;
-// Static variable to store error flags for various fault conditions (e.g., overvoltage, overtemperature)
+/* Declare static variable for error flags */
 static uint32_t error_flags = 0;
-
-// Static variable to count the number of completed charge cycles
+/* Declare static variable for charge cycle count */
 static uint32_t charge_cycle_count = 0;
-// Static variable to track the total time spent charging (in seconds)
+/* Declare static variable for total charging time (seconds) */
 static uint32_t total_charge_time = 0;
-// Static variable to track the total time spent discharging (in seconds)
+/* Declare static variable for total discharging time (seconds) */
 static uint32_t total_discharge_time = 0;
-// Static variable to track the total operating time of the BMS (in seconds)
+/* Declare static variable for total operating time (seconds) */
 static uint32_t total_operating_time = 0;
-// Static flag to indicate if a charging cycle has started (used to track cycle completion)
+/* Declare static flag for charging cycle start */
 static uint8_t charging_started = 0;
-
-// Static variable to store the timestamp when charging starts (in milliseconds), used for CC-CV charging
+/* Declare static variable for charge start time (ms) */
 static uint32_t charge_start_time = 0;
-// Static flag to indicate if the BMS is in Constant Voltage (CV) mode during charging (0 = CC, 1 = CV)
+/* Declare static flag for Constant Voltage mode */
 static uint8_t in_cv_mode = 0;
-
-// Static flag to enable or disable mission termination, set by Ground Control Station (GCS) via SFP command
+/* Declare static flag for mission termination enable */
 static uint8_t mission_termination_enabled = 0;
-
-// Static variable to store the balancing mask for the first BQ76920 IC (bit 0 = Cell 1, bit 1 = Cell 2, etc.)
+/* Declare static variable for balancing mask of first BQ76920 */
 static uint8_t balancing_mask_1 = 0;
-// Static variable to store the balancing mask for the second BQ76920 IC (bit 0 = Cell 1, bit 1 = Cell 2, etc.)
+/* Declare static variable for balancing mask of second BQ76920 */
 static uint8_t balancing_mask_2 = 0;
-// Static flag to indicate if cell balancing is active (1 = active, 0 = inactive)
+/* Declare static flag for cell balancing activity */
 static uint8_t balancing_active = 0;
-
-// Static array to store the state of 16 power lines (PWRL0 to PWRL15), controlled by SON/SOF commands (0 = OFF, 1 = ON)
+/* Declare static array for 16 power line states */
 static uint8_t power_lines[16] = {0};
-
-// Static variable to store the timestamp when the BMS starts blinking the debug LED (in milliseconds)
+/* Declare static variable for LED blink start time (ms) */
 static uint32_t startup_blink_start = 0;
-// Static variable to store the timestamp of the last LED toggle (in milliseconds)
+/* Declare static variable for last LED toggle time (ms) */
 static uint32_t last_blink_toggle = 0;
-// Define the duration for the startup LED blinking sequence (5 seconds)
+/* Define constant for LED blinking duration (5 seconds) */
 #define STARTUP_BLINK_DURATION 5000
-// Define the interval for toggling the LED during blinking (200 ms on/off)
+/* Define constant for LED toggle interval (0.2 seconds) */
 #define BLINK_INTERVAL 200
 
-// Structure to store battery configuration parameters
+/* Declare structure for battery configuration */
 BatteryConfig battery_config = {
-    .nominal_capacity = 4000.0f,      // Nominal capacity of the 4S2P pack (2 cells in parallel, 2000 mAh each, in mAh)
-    .ov_threshold = 4200,             // Overvoltage threshold per cell (4.2V, in mV)
-    .uv_threshold = 2800,             // Undervoltage threshold per cell (2.8V, in mV)
-    .occ_threshold = 5000,            // Overcurrent threshold for charging (5000 mA)
-    .ocd_threshold = 5000,            // Overcurrent threshold for discharging (5000 mA)
-    .overtemp_threshold = 60,         // Overtemperature threshold (60°C)
-    .undertemp_threshold = -20,       // Undertemperature threshold (-20°C)
-    .soc_low_threshold = 20.0f,       // Low SOC threshold for triggering immediate charging (20%)
-    .max_charge_time = 3600,          // Maximum allowed charging time (3600 seconds)
-    .cv_threshold = 4200              // Voltage threshold for switching to CV mode (4200 mV)
+    .nominal_capacity = 4000.0f, /* Set nominal capacity to 4000 mAh */
+    .ov_threshold = 4200, /* Set overvoltage threshold to 4.2V */
+    .uv_threshold = 2800, /* Set undervoltage threshold to 2.8V */
+    .occ_threshold = 5000, /* Set overcurrent charge threshold to 5000 mA */
+    .ocd_threshold = 5000, /* Set overcurrent discharge threshold to 5000 mA */
+    .overtemp_threshold = 60, /* Set max temperature to 60°C */
+    .undertemp_threshold = -20, /* Set min temperature to -20°C */
+    .soc_low_threshold = 20.0f, /* Set low SOC threshold to 20% */
+    .max_charge_time = 3600, /* Set max charge time to 3600 seconds */
+    .cv_threshold = 4200 /* Set Constant Voltage threshold to 4.2V */
 };
 
-// Static flag to indicate if the system is in firmware update mode (0 = normal, 1 = update)
+/* Declare static flag for firmware update mode */
 static uint8_t firmware_update_mode = 0;
-// Define the size of each firmware update packet (128 bytes)
+/* Define constant for firmware update packet size (128 bytes) */
 #define FIRMWARE_UPDATE_PACKET_SIZE 128
-// Define the timeout for firmware update operations (10 seconds)
+/* Define constant for firmware update timeout (10 seconds) */
 #define FIRMWARE_UPDATE_TIMEOUT 10000
-/* USER CODE END PV */
 
-/* Private function prototypes -----------------------------------------------*/
+/* Declare function prototypes */
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_I2C1_Init(void);
@@ -190,14 +164,8 @@ static void MX_I2C2_Init(void);
 static void MX_I2C3_Init(void);
 static void MX_RTC_Init(void);
 static void MX_USART1_UART_Init(void);
-static void MX_USART2_Init(void);
-static void MX_ADC1_Init(void);
-/* USER CODE BEGIN PFP */
-/* @brief  Function prototypes for private BMS functions.
- * @note   These functions handle core BMS operations like logging, state updates, and communication.
- * @context Declared here to be used throughout the BMS implementation, enabling modular design
- *          and separation of concerns in the CubeSat EPS.
- */
+static void MX_USART2_UART_Init(void);
+void MX_ADC1_Init(void);
 void Flash_Erase(uint32_t page);
 void Log_Error(const char *format, ...);
 void Log_Read_All(void);
@@ -211,2023 +179,1221 @@ HAL_StatusTypeDef ChargeBattery(void);
 void Bootloader_Check(void);
 void Bootloader_FirmwareUpdate(void);
 void JumpToApplication(void);
-/* USER CODE END PFP */
 
-/* Private user code ---------------------------------------------------------*/
-/* USER CODE BEGIN 0 */
-
-/**
-  * @brief  Erases a specified page in the STM32’s flash memory.
-  * @param  page: The page number to erase.
-  * @retval None (modifies flash memory in-place).
-  * @note   - Uses HAL flash functions to unlock, erase, and relock the flash memory.
-  *         - Ensures atomicity by locking the flash after erasure.
-  *         - Page size depends on the STM32 model (typically 2 KB for STM32L4).
-  * @context Called by `Log_Init` to clear the log region and by `Bootloader_FirmwareUpdate`
-  *          to erase the application region before writing new firmware. Flash erasure is
-  *          critical for maintaining persistent logs and enabling firmware updates in the CubeSat.
-  * @integration The STM32’s flash memory is used for both logging (diagnostic data) and firmware
-  *              storage, ensuring non-volatile storage of critical information in a space environment.
-  * @debug  - If erasure fails, check the page number and ensure the flash is not write-protected.
-  *         - Verify that `page_error` is checked for detailed error information if needed.
-  */
+/* Define function to erase a flash memory page
+ * Inputs:
+ * - page: The flash page number (uint32_t) to erase, specifying which memory section to clear.
+ * Returns: void, meaning it returns nothing; it performs the erase operation directly.
+ * What it does: Erases a specified page in flash memory to prepare it for writing new data.
+ */
 void Flash_Erase(uint32_t page)
 {
-    FLASH_EraseInitTypeDef erase_init; // Structure to configure flash erase operation
-    uint32_t page_error;               // Variable to store error information during erasure
-
-    // Configure erase operation for a single page
-    erase_init.TypeErase = FLASH_TYPEERASE_PAGES;
-    erase_init.Page = page;
-    erase_init.NbPages = 1;
-
-    // Unlock flash, erase page, and relock for atomicity
-    HAL_FLASH_Unlock();
-    HAL_FLASHEx_Erase(&erase_init, &page_error);
-    HAL_FLASH_Lock();
+    FLASH_EraseInitTypeDef erase_init; /* Create structure for erase settings */
+    uint32_t page_error; /* Create variable to store erase errors */
+    erase_init.TypeErase = FLASH_TYPEERASE_PAGES; /* Set erase type to pages */
+    erase_init.Page = page; /* Set page number to erase */
+    erase_init.NbPages = 1; /* Set number of pages to 1 */
+    HAL_FLASH_Unlock(); /* Unlock flash memory for erasing */
+    HAL_FLASHEx_Erase(&erase_init, &page_error); /* Perform page erase */
+    HAL_FLASH_Lock(); /* Lock flash memory for safety */
 }
 
-/**
-  * @brief  Logs an error message to flash memory with a timestamp.
-  * @param  format: Format string for the error message (printf-style).
-  * @param  ...: Variable arguments to format the message.
-  * @retval None (writes log entry to flash memory).
-  * @note   - Uses `HAL_GetTick` for timestamping (in milliseconds) instead of RTC for simplicity.
-  *         - Stores logs in a circular buffer in flash (`LOG_START_ADDR` to `LOG_START_ADDR + NUM_LOG_ENTRIES * LOG_ENTRY_SIZE`).
-  *         - Each log entry includes a timestamp (`TIMESTAMP_SIZE` bytes) and message (`MESSAGE_SIZE` bytes).
-  *         - Flash writes are done in 8-byte chunks (double words) to align with STM32 flash requirements.
-  * @context Called throughout the BMS (e.g., `Update_BMS_Mode`, `SSP_ProcessReceivedFrame`) to
-  *          log errors and system events for diagnostics. Logs are read and sent to the OBC every
-  *          10 seconds (`Log_Read_All`) for analysis, critical for debugging in space.
-  * @integration The STM32 uses its flash memory as a non-volatile log store, ensuring diagnostic
-  *              data persists across power cycles. The circular buffer prevents flash wear by
-  *              distributing writes, and `next_slot` is stored in flash for persistence.
-  * @debug  - If logs are not written, check flash write permissions and ensure `LOG_START_ADDR`
-  *           is correctly aligned.
-  *         - If messages are truncated, verify `MESSAGE_SIZE` is sufficient.
-  *         - Use `Log_Read_All` to retrieve logs and analyze system behavior.
-  */
+/* Define function to log errors to flash with a timestamp
+ * Inputs:
+ * - format: A format string (const char *) for the error message, like printf.
+ * - ...: Variable arguments for formatting, allowing flexible message creation.
+ * Returns: void, meaning it returns nothing; it writes the log to flash.
+ * What it does: Formats an error message with a timestamp and writes it to flash memory.
+ */
 void Log_Error(const char *format, ...)
 {
-    // Retrieve current time and date from RTC (though not used for timestamp in this implementation)
-    RTC_TimeTypeDef sTime = {0};
-    RTC_DateTypeDef sDate = {0};
-    HAL_RTC_GetTime(&hrtc, &sTime, RTC_FORMAT_BIN);
-    HAL_RTC_GetDate(&hrtc, &sDate, RTC_FORMAT_BIN);
-
-    // Use system tick count as timestamp (in milliseconds) for simplicity
-    uint64_t timestamp = HAL_GetTick();
-    char message_buffer[MESSAGE_SIZE]; // Buffer to format the error message
-
-    // Format the message using variable arguments, capped to prevent overflow
-    va_list args;
-    va_start(args, format);
-    vsnprintf(message_buffer, MESSAGE_SIZE, format, args);
-    va_end(args);
-
-    // Prepare log entry: timestamp followed by message
-    memset(log_buffer, 0, LOG_ENTRY_SIZE); // Clear buffer
-    memcpy(log_buffer, &timestamp, TIMESTAMP_SIZE); // Copy timestamp
-    strncpy((char *)(log_buffer + TIMESTAMP_SIZE), message_buffer, MESSAGE_SIZE - 1); // Copy message
-
-    // Calculate flash address for the current log slot
-    uint32_t address = LOG_START_ADDR + (next_slot * LOG_ENTRY_SIZE);
-    // Write log entry to flash in 8-byte chunks
-    HAL_FLASH_Unlock();
-    for (uint8_t i = 0; i < LOG_ENTRY_SIZE; i += 8) {
-        uint64_t data = *(uint64_t *)(log_buffer + i);
-        HAL_FLASH_Program(FLASH_TYPEPROGRAM_DOUBLEWORD, address + i, data);
+    RTC_TimeTypeDef sTime = {0}; /* Create structure for RTC time */
+    RTC_DateTypeDef sDate = {0}; /* Create structure for RTC date */
+    HAL_RTC_GetTime(&hrtc, &sTime, RTC_FORMAT_BIN); /* Read current time from RTC */
+    HAL_RTC_GetDate(&hrtc, &sDate, RTC_FORMAT_BIN); /* Read current date from RTC */
+    uint64_t timestamp = HAL_GetTick(); /* Get system tick count (ms) */
+    char message_buffer[MESSAGE_SIZE]; /* Create buffer for formatted message */
+    va_list args; /* Create variable for variable arguments */
+    va_start(args, format); /* Start processing variable arguments */
+    vsnprintf(message_buffer, MESSAGE_SIZE, format, args); /* Format message into buffer */
+    va_end(args); /* Clean up variable arguments */
+    memset(log_buffer, 0, LOG_ENTRY_SIZE); /* Clear log buffer */
+    memcpy(log_buffer, &timestamp, TIMESTAMP_SIZE); /* Copy timestamp to buffer */
+    strncpy((char *)(log_buffer + TIMESTAMP_SIZE), message_buffer, MESSAGE_SIZE - 1); /* Copy message to buffer */
+    uint32_t address = LOG_START_ADDR + (next_slot * LOG_ENTRY_SIZE); /* Calculate flash address */
+    HAL_FLASH_Unlock(); /* Unlock flash memory */
+    for (uint8_t i = 0; i < LOG_ENTRY_SIZE; i += 8) { /* Loop to write 8-byte chunks */
+        uint64_t data = *(uint64_t *)(log_buffer + i); /* Read 8 bytes from buffer */
+        HAL_FLASH_Program(FLASH_TYPEPROGRAM_DOUBLEWORD, address + i, data); /* Write to flash */
     }
-    HAL_FLASH_Lock();
-
-    // Update the next slot in the circular buffer and store it in flash
-    next_slot = (next_slot + 1) % NUM_LOG_ENTRIES;
-    HAL_FLASH_Unlock();
-    HAL_FLASH_Program(FLASH_TYPEPROGRAM_DOUBLEWORD, NEXT_SLOT_ADDR, next_slot);
-    HAL_FLASH_Lock();
+    HAL_FLASH_Lock(); /* Lock flash memory */
+    next_slot = (next_slot + 1) % NUM_LOG_ENTRIES; /* Update next slot (circular) */
+    HAL_FLASH_Unlock(); /* Unlock flash again */
+    HAL_FLASH_Program(FLASH_TYPEPROGRAM_DOUBLEWORD, NEXT_SLOT_ADDR, next_slot); /* Save next slot */
+    HAL_FLASH_Lock(); /* Lock flash memory */
 }
 
-/**
-  * @brief  Reads all logs from flash memory and sends them over RS485 to the OBC.
-  * @retval None (transmits logs via UART).
-  * @note   - Reads `NUM_LOG_ENTRIES` logs from flash starting at `LOG_START_ADDR`.
-  *         - Each log entry includes a timestamp and message, formatted as a string.
-  *         - Transmits logs using UART1 (RS485) with a blocking call (`HAL_MAX_DELAY`).
-  * @context Called every 10 seconds in the main loop (`main`) to send diagnostic logs to the OBC.
-  *          Logs provide critical insights into BMS operation (e.g., faults, mode changes) for
-  *          ground station analysis, essential for CubeSat mission success.
-  * @integration The STM32 uses UART1 (configured in `MX_USART1_UART_Init`) for RS485 communication.
-  *              The logs are transmitted as ASCII strings, ensuring compatibility with OBC logging
-  *              systems. The blocking nature ensures all logs are sent before proceeding.
-  * @debug  - If logs are not received by the OBC, check UART1 configuration (115200 baud, 8N1),
-  *           RS485 bus termination, and ensure the DE pin is properly controlled (not shown here).
-  *         - Verify that `NUM_LOG_ENTRIES` and `LOG_START_ADDR` are correctly defined.
-  */
+/* Define function to read and send all logs over RS485
+ * Inputs: None
+ * Returns: void, meaning it returns nothing; it sends logs via UART.
+ * What it does: Reads all log entries from flash and transmits them over USART1.
+ */
 void Log_Read_All(void)
 {
-    char buffer[128]; // Buffer to format log entries as strings
-    // Iterate through all log entries in flash
-    for (uint32_t i = 0; i < NUM_LOG_ENTRIES; i++) {
-        uint32_t address = LOG_START_ADDR + (i * LOG_ENTRY_SIZE); // Calculate log entry address
-        uint64_t timestamp = *(uint64_t *)address;                // Read timestamp
-        char *message = (char *)(address + TIMESTAMP_SIZE);       // Read message
-        // Format log entry as "Log <index>: Time=<timestamp>, Msg=<message>"
-        snprintf(buffer, sizeof(buffer), "Log %lu: Time=%llu, Msg=%s\r\n", i, timestamp, message);
-        // Transmit log entry over UART1 (RS485)
-        HAL_UART_Transmit(&huart1, (uint8_t *)buffer, strlen(buffer), HAL_MAX_DELAY);
+    char buffer[128]; /* Create buffer for log message */
+    for (uint32_t i = 0; i < NUM_LOG_ENTRIES; i++) { /* Loop through log entries */
+        uint32_t address = LOG_START_ADDR + (i * LOG_ENTRY_SIZE); /* Calculate log address */
+        uint64_t timestamp = *(uint64_t *)address; /* Read timestamp from flash */
+        char *message = (char *)(address + TIMESTAMP_SIZE); /* Get message pointer */
+        snprintf(buffer, sizeof(buffer), "Log %lu: Time=%llu, Msg=%s\r\n", i, timestamp, message); /* Format log message */
+        HAL_UART_Transmit(&huart1, (uint8_t *)buffer, strlen(buffer), HAL_MAX_DELAY); /* Send via USART1 */
     }
 }
 
-/**
-  * @brief  Initializes the logging system by setting up the flash memory log region.
-  * @retval None (modifies flash memory and `next_slot`).
-  * @note   - Loads the `next_slot` value from flash (`NEXT_SLOT_ADDR`) to resume logging.
-  *         - If `next_slot` is invalid (>= `NUM_LOG_ENTRIES`), erases the log page and resets it.
-  *         - Ensures the log region is ready for writing new entries.
-  * @context Called during system initialization in `main` to prepare the flash-based logging system.
-  *          Logging is critical for diagnostics in a CubeSat, where real-time debugging is not possible.
-  * @integration The STM32’s flash memory is used to store logs persistently, ensuring diagnostic data
-  *              survives power cycles. The circular buffer approach (`next_slot`) minimizes flash wear.
-  * @debug  - If initialization fails, check `NEXT_SLOT_ADDR` alignment and flash write permissions.
-  *         - Ensure `NUM_LOG_ENTRIES` and `LOG_ENTRY_SIZE` are correctly defined in `main.h`.
-  */
+/* Define function to initialize the logging system
+ * Inputs: None
+ * Returns: void, meaning it returns nothing; it initializes logging variables.
+ * What it does: Loads the next log slot from flash and resets it if invalid.
+ */
 void Log_Init(void)
 {
-    // Load the next slot index from flash
-    next_slot = *(uint32_t *)NEXT_SLOT_ADDR;
-    // If the slot index is invalid, erase the log region and reset
-    if (next_slot >= NUM_LOG_ENTRIES) {
-        Flash_Erase(FLASH_LOG_PAGE); // Erase the log page
-        next_slot = 0;               // Reset slot index
-        HAL_FLASH_Unlock();
-        HAL_FLASH_Program(FLASH_TYPEPROGRAM_DOUBLEWORD, NEXT_SLOT_ADDR, next_slot); // Store new slot index
-        HAL_FLASH_Lock();
+    next_slot = *(uint32_t *)NEXT_SLOT_ADDR; /* Load next slot index */
+    if (next_slot >= NUM_LOG_ENTRIES) { /* Check if index is invalid */
+        Flash_Erase(FLASH_LOG_PAGE); /* Erase log page */
+        next_slot = 0; /* Reset slot index */
+        HAL_FLASH_Unlock(); /* Unlock flash memory */
+        HAL_FLASH_Program(FLASH_TYPEPROGRAM_DOUBLEWORD, NEXT_SLOT_ADDR, next_slot); /* Save slot index */
+        HAL_FLASH_Lock(); /* Lock flash memory */
     }
 }
 
-/**
-  * @brief  Updates the State of Charge (SOC) and State of Health (SOH) of the battery.
-  * @retval None (updates global `soc` and `soh` variables).
-  * @note   - Uses coulomb counting to estimate SOC by integrating the average current over time.
-  *         - Applies a Kalman filter to reduce noise in SOC and SOH estimates.
-  *         - Updates SOH when the battery is fully charged (SOC >= 100%).
-  *         - Clamps SOC and SOH to the range [0, 100].
-  * @context Called in the main loop (`main`) to continuously update SOC and SOH, which are critical
-  *          for battery management in a CubeSat. SOC determines charging needs (`charge_immediately`),
-  *          and SOH indicates battery degradation over time.
-  * @integration The STM32 uses the Kalman filter (`kalman_filter.c`) to smooth noisy measurements from
-  *              coulomb counting, ensuring accurate SOC/SOH estimates. These values are sent to the OBC
-  *              via SSP (`SSP_SendStatus`) for monitoring.
-  * @debug  - If SOC/SOH values are erratic, check `pack_current_1` and `pack_current_2` for accuracy
-  *           (via BQ76920 readings) and verify Kalman filter parameters (`soc_kf`, `soh_kf`).
-  *         - Ensure `LOOP_TIME` matches the actual loop duration to avoid integration errors.
-  */
+/* Define function to update battery SOC and SOH
+ * Inputs: None
+ * Returns: void, meaning it returns nothing; it updates global SOC and SOH variables.
+ * What it does: Calculates SOC using coulomb counting and smooths it with a Kalman filter;
+ *               updates SOH when fully charged.
+ */
 void Update_SOC_SOH(void)
 {
-    // Coulomb counting: Integrate average current over LOOP_TIME to estimate charge
-    // Average current from both BQ76920 ICs, scaled to mAh (current in mA, time in seconds)
-    coulomb_count += ((pack_current_1 + pack_current_2) / 2.0 * LOOP_TIME) / 3600.0;
-    // Calculate raw SOC as a percentage of nominal capacity
-    float soc_measured = (coulomb_count / battery_config.nominal_capacity) * 100.0;
-    // Apply Kalman filter to smooth SOC estimate
-    soc = KalmanFilter_Update(&soc_kf, soc_measured);
-    // Clamp SOC to valid range [0, 100]
-    if (soc > 100.0) soc = 100.0;
-    if (soc < 0.0) soc = 0.0;
-
-    // Update SOH when the battery is fully charged (SOC >= 100%)
-    if (soc >= 100.0) {
-        actual_capacity = coulomb_count; // Update actual capacity based on coulomb count
-        // Calculate SOH as a percentage of initial capacity
-        soh = (actual_capacity / initial_capacity) * 100.0;
-        // Apply Kalman filter to smooth SOH estimate
-        soh = KalmanFilter_Update(&soh_kf, soh);
-        // Clamp SOH to valid range [0, 100]
-        if (soh > 100.0) soh = 100.0;
-        if (soh < 0.0) soh = 0.0;
+    coulomb_count += ((pack_current_1 + pack_current_2) / 2.0 * LOOP_TIME) / 3600.0; /* Integrate current for charge */
+    float soc_measured = (coulomb_count / battery_config.nominal_capacity) * 100.0; /* Calculate raw SOC (%) */
+    soc = KalmanFilter_Update(&soc_kf, soc_measured); /* Smooth SOC with Kalman filter */
+    if (soc > 100.0) soc = 100.0; /* Cap SOC at 100% */
+    if (soc < 0.0) soc = 0.0; /* Cap SOC at 0% */
+    if (soc >= 100.0) { /* Check if fully charged */
+        actual_capacity = coulomb_count; /* Update actual capacity */
+        soh = (actual_capacity / initial_capacity) * 100.0; /* Calculate SOH (%) */
+        soh = KalmanFilter_Update(&soh_kf, soh); /* Smooth SOH with Kalman filter */
+        if (soh > 100.0) soh = 100.0; /* Cap SOH at 100% */
+        if (soh < 0.0) soh = 0.0; /* Cap SOH at 0% */
     }
 }
 
-/**
-  * @brief  Updates the BMS operating mode and charge/discharge status based on system conditions.
-  * @retval None (updates global `bms_mode`, `charge_enabled`, and `discharge_enabled`).
-  * @note   - Handles fault states (e.g., overvoltage, overtemperature) by entering MODE_FAULT and
-  *           disabling charging/discharging as needed.
-  *         - Attempts recovery from faults with timeouts and reinitialization (e.g., for DEVICE_XREADY).
-  *         - In normal operation, determines mode (charging, discharging, sleep) based on current and SOC.
-  *         - Applies charge/discharge settings to both BQ76920 ICs for redundancy.
-  * @context Called in the main loop (`main`) to manage the BMS’s operating state, ensuring safety and
-  *          proper operation in a CubeSat. Fault handling protects the battery, while normal mode
-  *          logic optimizes power usage based on load and SOC.
-  * @integration The STM32 uses this function to manage the BMS state machine, interfacing with the
-  *              BQ76920 ICs via I2C (`BQ76920_SetChargeEnable`) and logging faults for diagnostics.
-  *              The state is communicated to the OBC via SSP (`SSP_SendStatus`).
-  * @debug  - If the BMS enters MODE_FAULT unexpectedly, check `error_flags` and trace the source
-  *           (e.g., voltage, current, temperature readings).
-  *         - If recovery fails, verify BQ76920 initialization (`BQ76920_Init`) and I2C communication.
-  *         - Ensure timeouts (`FAULT_TIMEOUT`, `TEMP_FAULT_TIMEOUT`) are appropriate for the system.
-  */
-void Update_BMS_Mode(void)
-{
-    // Static variables for fault state management
-    static uint32_t fault_start_time = 0;      // Timestamp when fault mode is entered
-    static uint8_t in_fault_mode = 0;          // Flag indicating if the BMS is in fault mode
-    static uint8_t recovery_attempts = 0;      // Counter for recovery attempts (e.g., for DEVICE_XREADY)
-    static const uint8_t MAX_RECOVERY_ATTEMPTS = 3; // Maximum recovery attempts before reset
-    static const uint32_t FAULT_TIMEOUT = 30000;    // Timeout for most faults (30 seconds)
-    static const uint32_t TEMP_FAULT_TIMEOUT = 60000; // Timeout for temperature faults (60 seconds)
-    static const uint32_t COOLDOWN_PERIOD = 10000;    // Cooldown period before checking fault clearance (10 seconds)
-    static const uint32_t RECOVERY_DELAY = 5000;      // Delay before attempting recovery (5 seconds)
-
-    // Check for any fault conditions
-    if (error_flags & (ERROR_OVERVOLTAGE | ERROR_UNDERVOLTAGE | ERROR_OCC | ERROR_OCD | ERROR_SCD | ERROR_OVERTEMP | ERROR_UNDERTEMP | ERROR_DISCREPANCY | ERROR_DEVICE_XREADY | ERROR_OVRD_ALERT))
-    {
-        // Enter fault mode if not already in it
-        if (!in_fault_mode)
-        {
-            fault_start_time = HAL_GetTick(); // Record fault entry time
-            in_fault_mode = 1;                // Set fault mode flag
-        }
-
-        bms_mode = MODE_FAULT; // Set BMS mode to fault
-
-        // Handle overvoltage fault
-        if (error_flags & ERROR_OVERVOLTAGE)
-        {
-            charge_enabled = 0;  // Disable charging
-            discharge_enabled = 1; // Allow discharging
-            Log_Error("Protective action: Disabled charging due to overvoltage");
-
-            // Check if all cells are below the overvoltage threshold to clear the fault
-            uint8_t all_below_threshold = 1;
-            for (uint8_t i = 0; i < NUM_GROUPS_PER_IC; i++)
-            {
-                if (group_voltages_1[i] > battery_config.ov_threshold || group_voltages_2[i] > battery_config.ov_threshold)
-                {
-                    all_below_threshold = 0;
-                    break;
-                }
-            }
-            if (all_below_threshold)
-            {
-                Log_Error("Overvoltage fault cleared");
-                error_flags &= ~ERROR_OVERVOLTAGE; // Clear fault flag
-                in_fault_mode = 0;                // Exit fault mode
-            }
-            else if (HAL_GetTick() - fault_start_time >= FAULT_TIMEOUT)
-            {
-                Log_Error("Overvoltage fault persists, triggering system reset");
-                HAL_NVIC_SystemReset(); // Reset system if fault persists
-            }
-        }
-        // Handle undervoltage fault
-        else if (error_flags & ERROR_UNDERVOLTAGE)
-        {
-            charge_enabled = 1;  // Allow charging
-            discharge_enabled = 0; // Disable discharging
-            Log_Error("Protective action: Disabled discharging due to undervoltage");
-
-            // Check if all cells are above the undervoltage threshold to clear the fault
-            uint8_t all_above_threshold = 1;
-            for (uint8_t i = 0; i < NUM_GROUPS_PER_IC; i++)
-            {
-                if (group_voltages_1[i] < battery_config.uv_threshold || group_voltages_2[i] < battery_config.uv_threshold)
-                {
-                    all_above_threshold = 0;
-                    break;
-                }
-            }
-            if (all_above_threshold)
-            {
-                Log_Error("Undervoltage fault cleared");
-                error_flags &= ~ERROR_UNDERVOLTAGE; // Clear fault flag
-                in_fault_mode = 0;                 // Exit fault mode
-            }
-            else if (HAL_GetTick() - fault_start_time >= FAULT_TIMEOUT)
-            {
-                Log_Error("Undervoltage fault persists, triggering system reset");
-                HAL_NVIC_SystemReset(); // Reset system if fault persists
-            }
-        }
-        // Handle overcurrent during charging (OCC)
-        else if (error_flags & ERROR_OCC)
-        {
-            charge_enabled = 0;  // Disable charging
-            discharge_enabled = 1; // Allow discharging
-            Log_Error("Protective action: Disabled charging due to overcurrent charge");
-
-            // Wait for cooldown, then check if current is safe (current should be non-negative)
-            if (HAL_GetTick() - fault_start_time >= COOLDOWN_PERIOD)
-            {
-                int16_t total_current = (pack_current_1 + pack_current_2) / 2;
-                if (total_current >= 0)
-                {
-                    Log_Error("Overcurrent charge fault cleared");
-                    error_flags &= ~ERROR_OCC; // Clear fault flag
-                    in_fault_mode = 0;        // Exit fault mode
-                }
-                else if (HAL_GetTick() - fault_start_time >= FAULT_TIMEOUT)
-                {
-                    Log_Error("Overcurrent charge fault persists, triggering system reset");
-                    HAL_NVIC_SystemReset(); // Reset system if fault persists
-                }
-            }
-        }
-        // Handle overcurrent during discharging (OCD)
-        else if (error_flags & ERROR_OCD)
-        {
-            charge_enabled = 1;  // Allow charging
-            discharge_enabled = 0; // Disable discharging
-            Log_Error("Protective action: Disabled discharging due to overcurrent discharge");
-
-            // Wait for cooldown, then check if current is safe (current should be non-positive)
-            if (HAL_GetTick() - fault_start_time >= COOLDOWN_PERIOD)
-            {
-                int16_t total_current = (pack_current_1 + pack_current_2) / 2;
-                if (total_current <= 0)
-                {
-                    Log_Error("Overcurrent discharge fault cleared");
-                    error_flags &= ~ERROR_OCD; // Clear fault flag
-                    in_fault_mode = 0;        // Exit fault mode
-                }
-                else if (HAL_GetTick() - fault_start_time >= FAULT_TIMEOUT)
-                {
-                    Log_Error("Overcurrent discharge fault persists, triggering system reset");
-                    HAL_NVIC_SystemReset(); // Reset system if fault persists
-                }
-            }
-        }
-        // Handle short-circuit discharge (SCD)
-        else if (error_flags & ERROR_SCD)
-        {
-            charge_enabled = 0;  // Disable charging
-            discharge_enabled = 0; // Disable discharging
-            Log_Error("Protective action: Disabled charging and discharging due to short-circuit discharge");
-
-            // Check if the short-circuit condition is cleared after timeout
-            if (HAL_GetTick() - fault_start_time >= FAULT_TIMEOUT)
-            {
-                uint8_t status1, status2;
-                uint8_t scd_cleared = 1;
-                // Check SCD bit (bit 3) in BQ76920 status registers
-                if (BQ76920_ReadStatus(&hi2c1, &status1) == HAL_OK && (status1 & (1 << 3)))
-                {
-                    scd_cleared = 0; // SCD still active on IC1
-                }
-                if (BQ76920_ReadStatus(&hi2c2, &status2) == HAL_OK && (status2 & (1 << 3)))
-                {
-                    scd_cleared = 0; // SCD still active on IC2
-                }
-                if (scd_cleared)
-                {
-                    Log_Error("Short-circuit discharge fault cleared");
-                    error_flags &= ~ERROR_SCD; // Clear fault flag
-                    in_fault_mode = 0;        // Exit fault mode
-                }
-                else
-                {
-                    Log_Error("Short-circuit discharge fault persists, triggering system reset");
-                    HAL_NVIC_SystemReset(); // Reset system if fault persists
-                }
-            }
-        }
-        // Handle overtemperature fault
-        else if (error_flags & ERROR_OVERTEMP)
-        {
-            charge_enabled = 0;  // Disable charging
-            discharge_enabled = 0; // Disable discharging
-            Log_Error("Protective action: Disabled charging and discharging due to overtemperature");
-
-            // Check if temperatures are safe with a 10°C hysteresis
-            if (temperature_1 < (battery_config.overtemp_threshold - 10) && temperature_2 < (battery_config.overtemp_threshold - 10) && pcb_temperature < (battery_config.overtemp_threshold - 10))
-            {
-                Log_Error("Overtemperature fault cleared");
-                error_flags &= ~ERROR_OVERTEMP; // Clear fault flag
-                in_fault_mode = 0;             // Exit fault mode
-            }
-            else if (HAL_GetTick() - fault_start_time >= TEMP_FAULT_TIMEOUT)
-            {
-                Log_Error("Overtemperature fault persists, triggering system reset");
-                HAL_NVIC_SystemReset(); // Reset system if fault persists
-            }
-        }
-        // Handle undertemperature fault
-        else if (error_flags & ERROR_UNDERTEMP)
-        {
-            charge_enabled = 0;  // Disable charging
-            discharge_enabled = 1; // Allow discharging
-            Log_Error("Protective action: Disabled charging due to undertemperature");
-
-            // Check if temperatures are safe with a 10°C hysteresis
-            if (temperature_1 > (battery_config.undertemp_threshold + 10) && temperature_2 > (battery_config.undertemp_threshold + 10))
-            {
-                Log_Error("Undertemperature fault cleared");
-                error_flags &= ~ERROR_UNDERTEMP; // Clear fault flag
-                in_fault_mode = 0;              // Exit fault mode
-            }
-            else if (HAL_GetTick() - fault_start_time >= TEMP_FAULT_TIMEOUT)
-            {
-                Log_Error("Undertemperature fault persists, triggering system reset");
-                HAL_NVIC_SystemReset(); // Reset system if fault persists
-            }
-        }
-        // Handle redundancy discrepancy between BQ76920 ICs
-        else if (error_flags & ERROR_DISCREPANCY)
-        {
-            charge_enabled = 0;  // Disable charging
-            discharge_enabled = 0; // Disable discharging
-            Log_Error("Protective action: Disabled charging and discharging due to redundancy discrepancy");
-
-            // Attempt reinitialization after delay
-            if (HAL_GetTick() - fault_start_time >= RECOVERY_DELAY)
-            {
-                Log_Error("Attempting to reinitialize BQ76920 ICs to resolve discrepancy");
-                if (BQ76920_Init(&hi2c1) != HAL_OK)
-                {
-                    Log_Error("Failed to reinitialize BQ76920 (I2C1)");
-                }
-                if (BQ76920_Init(&hi2c2) != HAL_OK)
-                {
-                    Log_Error("Failed to reinitialize BQ76920 (I2C2)");
-                }
-
-                // Recheck redundancy after reinitialization
-                uint8_t discrepancy_flag = 0;
-                BQ76920_CheckRedundancy(group_voltages_1, group_voltages_2, pack_current_1, pack_current_2, &discrepancy_flag);
-                if (!discrepancy_flag)
-                {
-                    Log_Error("Redundancy discrepancy fault cleared");
-                    error_flags &= ~ERROR_DISCREPANCY; // Clear fault flag
-                    in_fault_mode = 0;                // Exit fault mode
-                }
-                else if (HAL_GetTick() - fault_start_time >= FAULT_TIMEOUT)
-                {
-                    Log_Error("Redundancy discrepancy fault persists, triggering system reset");
-                    HAL_NVIC_SystemReset(); // Reset system if fault persists
-                }
-            }
-        }
-        // Handle DEVICE_XREADY fault (BQ76920 initialization issue)
-        else if (error_flags & ERROR_DEVICE_XREADY)
-        {
-            charge_enabled = 0;  // Disable charging
-            discharge_enabled = 0; // Disable discharging
-            Log_Error("Protective action: Disabled charging and discharging due to DEVICE_XREADY");
-
-            // Attempt reinitialization with limited retries
-            if (HAL_GetTick() - fault_start_time >= RECOVERY_DELAY)
-            {
-                recovery_attempts++;
-                Log_Error("Attempting to reinitialize BQ76920 ICs (attempt %d)", recovery_attempts);
-                uint8_t init_success = 1;
-                if (BQ76920_Init(&hi2c1) != HAL_OK)
-                {
-                    Log_Error("Failed to reinitialize BQ76920 (I2C1)");
-                    init_success = 0;
-                }
-                if (BQ76920_Init(&hi2c2) != HAL_OK)
-                {
-                    Log_Error("Failed to reinitialize BQ76920 (I2C2)");
-                    init_success = 0;
-                }
-
-                if (init_success)
-                {
-                    Log_Error("DEVICE_XREADY fault cleared");
-                    error_flags &= ~ERROR_DEVICE_XREADY; // Clear fault flag
-                    in_fault_mode = 0;                  // Exit fault mode
-                    recovery_attempts = 0;              // Reset attempts
-                }
-                else if (recovery_attempts >= MAX_RECOVERY_ATTEMPTS)
-                {
-                    Log_Error("Failed to recover from DEVICE_XREADY after %d attempts, triggering system reset", MAX_RECOVERY_ATTEMPTS);
-                    HAL_NVIC_SystemReset(); // Reset system if recovery fails
-                }
-            }
-        }
-        // Handle OVRD_ALERT fault (general alert from BQ76920)
-        else if (error_flags & ERROR_OVRD_ALERT)
-        {
-            charge_enabled = 0;  // Disable charging
-            discharge_enabled = 0; // Disable discharging
-            Log_Error("Protective action: Disabled charging and discharging due to OVRD_ALERT");
-
-            // Check if the alert condition is cleared after cooldown
-            if (HAL_GetTick() - fault_start_time >= COOLDOWN_PERIOD)
-            {
-                uint8_t status1, status2;
-                uint8_t alert_cleared = 1;
-                // Check OVRD_ALERT bit (bit 6) in BQ76920 status registers
-                if (BQ76920_ReadStatus(&hi2c1, &status1) == HAL_OK && (status1 & (1 << 6)))
-                {
-                    alert_cleared = 0; // Alert still active on IC1
-                }
-                if (BQ76920_ReadStatus(&hi2c2, &status2) == HAL_OK && (status2 & (1 << 6)))
-                {
-                    alert_cleared = 0; // Alert still active on IC2
-                }
-                if (alert_cleared)
-                {
-                    Log_Error("OVRD_ALERT fault cleared");
-                    error_flags &= ~ERROR_OVRD_ALERT; // Clear fault flag
-                    in_fault_mode = 0;               // Exit fault mode
-                }
-                else if (HAL_GetTick() - fault_start_time >= FAULT_TIMEOUT)
-                {
-                    Log_Error("OVRD_ALERT fault persists, triggering system reset");
-                    HAL_NVIC_SystemReset(); // Reset system if fault persists
-                }
-            }
-        }
-
-        // Apply charge/discharge settings to both BQ76920 ICs for redundancy
-        BQ76920_SetChargeEnable(&hi2c1, charge_enabled, discharge_enabled);
-        BQ76920_SetChargeEnable(&hi2c2, charge_enabled, discharge_enabled);
-        return; // Exit function while in fault mode
-    }
-
-    // Normal operation: Reset fault state
-    in_fault_mode = 0;
-    recovery_attempts = 0;
-
-    // Trigger immediate charging if SOC is below threshold
-    charge_immediately = (soc < battery_config.soc_low_threshold) ? 1 : 0;
-
-    // Determine operating mode based on average current
-    int16_t total_current = (pack_current_1 + pack_current_2) / 2;
-    if (total_current < 0) { // Negative current indicates charging
-        bms_mode = MODE_CHARGING;
-        charge_enabled = 1;
-        discharge_enabled = 0;
-    } else if (total_current > 0) { // Positive current indicates discharging
-        bms_mode = MODE_DISCHARGING;
-        charge_enabled = 0;
-        discharge_enabled = 1;
-    } else { // No current flow
-        if (soc < battery_config.soc_low_threshold) { // Charge if SOC is low
-            bms_mode = MODE_CHARGING;
-            charge_enabled = 1;
-            discharge_enabled = 0;
-        } else { // Enter sleep mode if SOC is sufficient
-            bms_mode = MODE_SLEEP;
-            charge_enabled = 0;
-            discharge_enabled = 0;
-        }
-    }
-
-    // Apply charge/discharge settings to both BQ76920 ICs
-    BQ76920_SetChargeEnable(&hi2c1, charge_enabled, discharge_enabled);
-    BQ76920_SetChargeEnable(&hi2c2, charge_enabled, discharge_enabled);
-}
-
-/**
-  * @brief  Reads the internal temperature sensor of the STM32 microcontroller.
-  * @retval int16_t: Temperature in degrees Celsius (°C).
-  * @note   - Uses ADC1 to measure the MCU’s internal temperature sensor.
-  *         - Conversion formula is based on STM32L4 reference data: (V_SENSE * V_REF / ADC_MAX - V_25) * 100 / SLOPE + 25.
-  *         - Assumes V_REF = 3.3V, ADC_MAX = 4096 (12-bit), V_25 = 760 mV, SLOPE = 2.5 mV/°C.
-  * @context Called in the main loop (`main`) to monitor the PCB temperature, which is used for
-  *          overtemperature protection (`ERROR_OVERTEMP`) alongside battery temperatures.
-  *          PCB temperature monitoring protects the electronics in the CubeSat’s harsh environment.
-  * @integration The STM32’s ADC1 (configured in `MX_ADC1_Init`) is used to read the internal
-  *              temperature sensor, providing a third temperature measurement point alongside
-  *              NTC-1 and NTC-2 (via `Temperature_Read`).
-  * @debug  - If temperature readings are inaccurate, verify ADC calibration and the conversion formula.
-  *         - Ensure ADC1 is properly initialized and not conflicting with other ADC channels.
-  *         - Use a reference thermometer to calibrate the internal sensor if needed.
-  */
-int16_t Read_Internal_Temperature(void)
-{
-    // Start ADC conversion
-    HAL_ADC_Start(&hadc1);
-    // Wait for conversion to complete
-    HAL_ADC_PollForConversion(&hadc1, HAL_MAX_DELAY);
-    // Read raw ADC value (12-bit, 0-4095)
-    uint32_t raw = HAL_ADC_GetValue(&hadc1);
-    // Stop ADC
-    HAL_ADC_Stop(&hadc1);
-
-    // Convert ADC reading to temperature (°C)
-    // Formula: (V_SENSE * 3300 / 4096 - 760) * 100 / 250 + 25
-    // Where V_SENSE is the ADC reading scaled to voltage, 760 mV is V_25, 2.5 mV/°C is the slope
-    int32_t temp = ((raw * 3300 / 4096) - 760) * 100 / 250 + 25;
-    return (int16_t)temp;
-}
-
-/**
-  * @brief  Sends the current BMS status to the OBC using the SSP protocol.
-  * @retval None (transmits telemetry frame via RS485).
-  * @note   - Constructs a telemetry frame with battery status (voltages, currents, SOC, SOH, etc.).
-  *         - Sends the frame every 5 seconds or on request (e.g., SSP CMD_GOSTM).
-  *         - Controls the RS485 DE pin to switch between transmit and receive modes.
-  * @context Called in the main loop (`main`) to periodically send telemetry to the OBC, and also
-  *          in response to SSP commands (e.g., GOSTM, GSTLM, GOTLM). Telemetry is critical for
-  *          ground station monitoring of the CubeSat’s power system.
-  * @integration The STM32 uses USART2 (configured in `MX_USART2_Init`) for RS485 communication.
-  *              The SSP protocol (`ssp.c`) ensures reliable data exchange with the OBC. The DE pin
-  *              is controlled via GPIO to manage half-duplex communication.
-  * @debug  - If the OBC does not receive telemetry, check RS485 bus connectivity, DE pin toggling,
-  *           and USART2 configuration (115200 baud, 8N1).
-  *         - Verify that telemetry data (e.g., voltages, SOC) is correctly packed (`SSP_PackTelemetry`).
-  */
+/* Define function to send BMS status to OBC
+ * Inputs: None
+ * Returns: void, meaning it returns nothing; it sends telemetry via RS485.
+ * What it does: Packs BMS telemetry into an SSP frame and sends it over USART2.
+ */
 void SSP_SendStatus(void)
 {
-    SSP_TelemetryTypeDef telemetry = {0}; // Structure to hold telemetry data
-    SSP_FrameTypeDef frame = {0};         // SSP frame to transmit
-    uint16_t frame_len;                   // Length of the constructed frame
-
-    // Calculate total pack voltage by summing cell voltages from IC1
-    uint32_t pack_voltage = group_voltages_1[0] + group_voltages_1[1] + group_voltages_1[2] + group_voltages_1[3];
-    // Populate telemetry structure with current BMS status
-    telemetry.charge_immediately = charge_immediately;
-    telemetry.bms_online = bms_online;
-    telemetry.error_flags = error_flags;
-    telemetry.pack_voltage_1 = (uint16_t)pack_voltage; // Total pack voltage from IC1
-    telemetry.pack_voltage_2 = (uint16_t)pack_voltage; // Same for IC2 (redundancy check done elsewhere)
-    telemetry.pack_current_1 = pack_current_1;
-    telemetry.pack_current_2 = pack_current_2;
-    telemetry.soc = (uint8_t)soc;
-    telemetry.soh = (uint8_t)soh;
-    telemetry.temp_1 = temperature_1;
-    telemetry.temp_2 = temperature_2;
-    telemetry.pcb_temp = pcb_temperature;
-    for (uint8_t i = 0; i < NUM_GROUPS_PER_IC; i++) {
-        telemetry.group_voltages[i] = group_voltages_1[i]; // Cell voltages from IC1
+    SSP_TelemetryTypeDef telemetry = {0}; /* Create telemetry structure */
+    SSP_FrameTypeDef frame = {0}; /* Create SSP frame structure */
+    uint16_t frame_len; /* Create variable for frame length */
+    uint32_t pack_voltage = group_voltages_1[0] + group_voltages_1[1] + group_voltages_1[2] + group_voltages_1[3]; /* Sum cell voltages */
+    telemetry.charge_immediately = charge_immediately; /* Set charge flag */
+    telemetry.bms_online = bms_online; /* Set online status */
+    telemetry.error_flags = error_flags; /* Set error flags */
+    telemetry.pack_voltage_1 = (uint16_t)pack_voltage; /* Set pack voltage (IC1) */
+    telemetry.pack_voltage_2 = (uint16_t)pack_voltage; /* Set pack voltage (IC2) */
+    telemetry.pack_current_1 = pack_current_1; /* Set current (IC1) */
+    telemetry.pack_current_2 = pack_current_2; /* Set current (IC2) */
+    telemetry.soc = (uint8_t)soc; /* Set SOC as 8-bit */
+    telemetry.soh = (uint8_t)soh; /* Set SOH as 8-bit */
+    telemetry.temp_1 = temperature_1; /* Set NTC-1 temperature */
+    telemetry.temp_2 = temperature_2; /* Set NTC-2 temperature */
+    telemetry.pcb_temp = pcb_temperature; /* Set PCB temperature */
+    for (uint8_t i = 0; i < NUM_GROUPS_PER_IC; i++) { /* Loop through cells */
+        telemetry.group_voltages[i] = group_voltages_1[i]; /* Copy cell voltages */
     }
-    telemetry.balancing_active = balancing_active;
-    telemetry.balancing_mask_1 = balancing_mask_1;
-    telemetry.balancing_mask_2 = balancing_mask_2;
-    telemetry.charge_cycle_count = charge_cycle_count;
-    telemetry.total_charge_time = total_charge_time;
-    telemetry.total_discharge_time = total_discharge_time;
-    telemetry.total_operating_time = total_operating_time;
-
-    // Construct and send the SSP frame
-    SSP_PackTelemetry(&telemetry, &frame); // Pack telemetry data into frame
-    SSP_ConstructFrame(&frame, ssp_tx_buffer, &frame_len); // Serialize frame
-    HAL_GPIO_WritePin(RS4852_DE_GPIO_Port, RS4852_DE_Pin, GPIO_PIN_SET); // Enable RS485 transmit
-    SSP_TransmitFrame(&husart2, ssp_tx_buffer, frame_len); // Transmit frame
-    HAL_GPIO_WritePin(RS4852_DE_GPIO_Port, RS4852_DE_Pin, GPIO_PIN_RESET); // Disable RS485 transmit
+    telemetry.balancing_active = balancing_active; /* Set balancing flag */
+    telemetry.balancing_mask_1 = balancing_mask_1; /* Set balancing mask (IC1) */
+    telemetry.balancing_mask_2 = balancing_mask_2; /* Set balancing mask (IC2) */
+    telemetry.charge_cycle_count = charge_cycle_count; /* Set cycle count */
+    telemetry.total_charge_time = total_charge_time; /* Set charge time */
+    telemetry.total_discharge_time = total_discharge_time; /* Set discharge time */
+    telemetry.total_operating_time = total_operating_time; /* Set operating time */
+    SSP_PackTelemetry(&telemetry, &frame); /* Pack telemetry into frame */
+    SSP_ConstructFrame(&frame, ssp_tx_buffer, &frame_len); /* Build frame */
+    HAL_GPIO_WritePin(RS4852_DE_GPIO_Port, RS4852_DE_Pin, GPIO_PIN_SET); /* Set DE pin to transmit */
+    SSP_TransmitFrame(&huart2, ssp_tx_buffer, frame_len); /* Send frame */
+    HAL_GPIO_WritePin(RS4852_DE_GPIO_Port, RS4852_DE_Pin, GPIO_PIN_RESET); /* Set DE pin to receive */
 }
 
-/**
-  * @brief  Processes a received SSP frame from the OBC and responds accordingly.
-  * @param  frame: Pointer to the received SSP frame structure.
-  * @retval None (processes frame and sends response via RS485).
-  * @note   - Handles commands like PING, SON/SOF (power line control), KEN (mission termination),
-  *           SM (set mode), GM (get mode), GOSTM/GSTLM/GOTLM (get status), and SFP (set parameters).
-  *         - Responds with ACK/NACK frames, logging actions for diagnostics.
-  *         - Ignores frames not addressed to EPS or marked as replies/time-tagged.
-  * @context Called in the main loop (`main`) when an SSP frame is received (`SSP_ReceiveFrame`).
-  *          Enables the OBC to control the BMS (e.g., turn power lines on/off, request status) and
-  *          supports firmware updates, critical for CubeSat mission operations.
-  * @integration The STM32 uses USART2 (RS485) to receive commands and send responses via SSP (`ssp.c`).
-  *              GPIO controls the RS485 DE pin for half-duplex communication. Commands like SON/SOF
-  *              interact with the `power_lines` array, which may control TPS22810 load switches.
-  * @debug  - If commands are not processed, verify the frame’s destination (`dest`) and command ID (`cmd_id`).
-  *         - Check RS485 bus connectivity and DE pin toggling for response transmission.
-  *         - Log received frames (`log_msg`) to trace command execution and errors.
-  */
+/* Define function to process received SSP frames
+ * Inputs:
+ * - frame: Pointer to an SSP frame structure (SSP_FrameTypeDef *), containing received
+ *          command and data from the OBC.
+ * Returns: void, meaning it returns nothing; it processes commands and sends responses.
+ * What it does: Processes OBC commands (e.g., ping, mode change) and sends ACK/NACK responses.
+ */
 void SSP_ProcessReceivedFrame(SSP_FrameTypeDef *frame)
 {
-    // Filter frames: Ignore those not addressed to EPS, broadcast, or multicast
-    if (frame->dest != SSP_ADDR_EPS && frame->dest != SSP_ADDR_BROADCAST && frame->dest != SSP_ADDR_MULTICAST) {
-        return;
+    if (frame->dest != SSP_ADDR_EPS && frame->dest != SSP_ADDR_BROADCAST && frame->dest != SSP_ADDR_MULTICAST) { /* Check if frame is for EPS */
+        return; /* Exit if not addressed to EPS */
     }
-
-    // Ignore reply frames (responses to our requests)
-    if (frame->cmd_id & SSP_FRAME_TYPE_REPLY) {
-        return;
+    if (frame->cmd_id & SSP_FRAME_TYPE_REPLY) { /* Check if frame is a reply */
+        return; /* Exit if reply frame */
     }
-
-    // Ignore time-tagged commands (handled by the OBC)
-    if (frame->cmd_id & SSP_CMD_TYPE_TIMETAG) {
-        return;
+    if (frame->cmd_id & SSP_CMD_TYPE_TIMETAG) { /* Check if frame is time-tagged */
+        return; /* Exit if time-tagged */
     }
-
-    // Log the received command for diagnostics
-    char log_msg[MESSAGE_SIZE];
-    snprintf(log_msg, sizeof(log_msg), "Received CMD: ID=0x%02X, SRC=0x%02X, LEN=%d", frame->cmd_id, frame->src, frame->data_len);
-    Log_Error(log_msg);
-
-    // Prepare response frame: Default to NACK with command ID echoed back
-    SSP_FrameTypeDef response = {0};
-    response.dest = frame->src;      // Respond to sender
-    response.src = SSP_ADDR_EPS;     // Source is EPS
-    response.data_len = 1;           // Default response length
-    response.data[0] = frame->cmd_id; // Echo command ID
-
-    // Process the command based on its ID (mask out flags to get base command)
-    switch (frame->cmd_id & 0x3F) {
-        case SSP_CMD_PING: // 0x00: Ping request
-            response.cmd_id = SSP_CMD_ACK | SSP_FRAME_TYPE_REPLY; // Respond with ACK
+    char log_msg[MESSAGE_SIZE]; /* Create buffer for logging */
+    snprintf(log_msg, sizeof(log_msg), "Received CMD: ID=0x%02X, SRC=0x%02X, LEN=%d", frame->cmd_id, frame->src, frame->data_len); /* Format log message */
+    Log_Error(log_msg); /* Log received command */
+    SSP_FrameTypeDef response = {0}; /* Create response frame structure */
+    response.dest = frame->src; /* Set response destination to sender */
+    response.src = SSP_ADDR_EPS; /* Set response source to EPS */
+    response.data_len = 1; /* Set response data length to 1 */
+    response.data[0] = frame->cmd_id; /* Echo command ID */
+    switch (frame->cmd_id & 0x3F) { /* Process command ID (mask flags) */
+        case SSP_CMD_PING: /* Handle ping command */
+            response.cmd_id = SSP_CMD_ACK | SSP_FRAME_TYPE_REPLY; /* Set ACK response */
             break;
-
-        case SSP_CMD_SON: // 0x0B: Switch ON a power line
-            if (frame->data_len == 1) { // Expect exactly 1 byte (power line ID)
-                uint8_t pwrl_id = frame->data[0];
-                if (pwrl_id <= 15) { // Valid power line ID (0-15)
-                    power_lines[pwrl_id] = 1; // Turn on power line
-                    response.cmd_id = SSP_CMD_ACK | SSP_FRAME_TYPE_REPLY;
-                    snprintf(log_msg, sizeof(log_msg), "SON command: PWRL%d ON", pwrl_id);
-                    Log_Error(log_msg);
+        case SSP_CMD_SON: /* Handle switch-on command */
+            if (frame->data_len == 1) { /* Check data length */
+                uint8_t pwrl_id = frame->data[0]; /* Get power line ID */
+                if (pwrl_id <= 15) { /* Validate ID */
+                    power_lines[pwrl_id] = 1; /* Turn on power line */
+                    response.cmd_id = SSP_CMD_ACK | SSP_FRAME_TYPE_REPLY; /* Set ACK response */
+                    snprintf(log_msg, sizeof(log_msg), "SON command: PWRL%d ON", pwrl_id); /* Format log */
+                    Log_Error(log_msg); /* Log action */
                 } else {
-                    response.cmd_id = SSP_CMD_NACK | SSP_FRAME_TYPE_REPLY; // Invalid ID
+                    response.cmd_id = SSP_CMD_NACK | SSP_FRAME_TYPE_REPLY; /* Set NACK response */
                 }
             } else {
-                response.cmd_id = SSP_CMD_NACK | SSP_FRAME_TYPE_REPLY; // Invalid data length
+                response.cmd_id = SSP_CMD_NACK | SSP_FRAME_TYPE_REPLY; /* Set NACK response */
             }
             break;
-
-        case SSP_CMD_SOF: // 0x0C: Switch OFF a power line
-            if (frame->data_len == 1) { // Expect exactly 1 byte (power line ID)
-                uint8_t pwrl_id = frame->data[0];
-                if (pwrl_id <= 15) { // Valid power line ID (0-15)
-                    power_lines[pwrl_id] = 0; // Turn off power line
-                    response.cmd_id = SSP_CMD_ACK | SSP_FRAME_TYPE_REPLY;
-                    snprintf(log_msg, sizeof(log_msg), "SOF command: PWRL%d OFF", pwrl_id);
-                    Log_Error(log_msg);
+        case SSP_CMD_SOF: /* Handle switch-off command */
+            if (frame->data_len == 1) { /* Check data length */
+                uint8_t pwrl_id = frame->data[0]; /* Get power line ID */
+                if (pwrl_id <= 15) { /* Validate ID */
+                    power_lines[pwrl_id] = 0; /* Turn off power line */
+                    response.cmd_id = SSP_CMD_ACK | SSP_FRAME_TYPE_REPLY; /* Set ACK response */
+                    snprintf(log_msg, sizeof(log_msg), "SOF command: PWRL%d OFF", pwrl_id); /* Format log */
+                    Log_Error(log_msg); /* Log action */
                 } else {
-                    response.cmd_id = SSP_CMD_NACK | SSP_FRAME_TYPE_REPLY; // Invalid ID
+                    response.cmd_id = SSP_CMD_NACK | SSP_FRAME_TYPE_REPLY; /* Set NACK response */
                 }
             } else {
-                response.cmd_id = SSP_CMD_NACK | SSP_FRAME_TYPE_REPLY; // Invalid data length
+                response.cmd_id = SSP_CMD_NACK | SSP_FRAME_TYPE_REPLY; /* Set NACK response */
             }
             break;
-
-        case SSP_CMD_KEN: // 0x31: Mission termination request
-            if (frame->data_len == 0) { // Expect no data
-                if (mission_termination_enabled) { // Check if termination is enabled (via SFP)
-                    response.cmd_id = SSP_CMD_ACK | SSP_FRAME_TYPE_REPLY;
-                    Log_Error("KEN command executed: Mission termination enabled");
+        case SSP_CMD_KEN: /* Handle mission termination */
+            if (frame->data_len == 0) { /* Check no data */
+                if (mission_termination_enabled) { /* Check termination enabled */
+                    response.cmd_id = SSP_CMD_ACK | SSP_FRAME_TYPE_REPLY; /* Set ACK response */
+                    Log_Error("KEN command executed: Mission termination enabled"); /* Log action */
                 } else {
-                    response.cmd_id = SSP_CMD_NACK | SSP_FRAME_TYPE_REPLY;
-                    Log_Error("KEN command rejected: Mission termination not enabled");
+                    response.cmd_id = SSP_CMD_NACK | SSP_FRAME_TYPE_REPLY; /* Set NACK response */
+                    Log_Error("KEN command rejected: Mission termination not enabled"); /* Log rejection */
                 }
             } else {
-                response.cmd_id = SSP_CMD_NACK | SSP_FRAME_TYPE_REPLY; // Invalid data length
+                response.cmd_id = SSP_CMD_NACK | SSP_FRAME_TYPE_REPLY; /* Set NACK response */
             }
             break;
-
-        case SSP_CMD_KDIS: // 0x32: Reconnect batteries (undo KEN)
-            if (frame->data_len == 0) { // Expect no data
-                response.cmd_id = SSP_CMD_ACK | SSP_FRAME_TYPE_REPLY;
-                Log_Error("KDIS command executed: Batteries reconnected");
+        case SSP_CMD_KDIS: /* Handle battery reconnect */
+            if (frame->data_len == 0) { /* Check no data */
+                response.cmd_id = SSP_CMD_ACK | SSP_FRAME_TYPE_REPLY; /* Set ACK response */
+                Log_Error("KDIS command executed: Batteries reconnected"); /* Log action */
             } else {
-                response.cmd_id = SSP_CMD_NACK | SSP_FRAME_TYPE_REPLY; // Invalid data length
+                response.cmd_id = SSP_CMD_NACK | SSP_FRAME_TYPE_REPLY; /* Set NACK response */
             }
             break;
-
-        case SSP_CMD_SM: // 0x15: Set BMS mode
-            if (frame->data_len >= 1) { // Expect at least 1 byte (mode)
-                bms_mode = frame->data[0]; // Update BMS mode
-                Update_BMS_Mode();        // Apply mode change
-                response.cmd_id = SSP_CMD_ACK | SSP_FRAME_TYPE_REPLY;
-                Log_Error("Mode changed by OBC");
+        case SSP_CMD_SM: /* Handle set mode command */
+            if (frame->data_len >= 1) { /* Check data length */
+                bms_mode = frame->data[0]; /* Set new mode */
+                Update_BMS_Mode(); /* Apply mode change */
+                response.cmd_id = SSP_CMD_ACK | SSP_FRAME_TYPE_REPLY; /* Set ACK response */
+                Log_Error("Mode changed by OBC"); /* Log action */
             } else {
-                response.cmd_id = SSP_CMD_NACK | SSP_FRAME_TYPE_REPLY; // Invalid data length
+                response.cmd_id = SSP_CMD_NACK | SSP_FRAME_TYPE_REPLY; /* Set NACK response */
             }
             break;
-
-        case SSP_CMD_GM: // 0x16: Get BMS mode
-            response.cmd_id = SSP_CMD_ACK | SSP_FRAME_TYPE_REPLY;
-            response.data_len = 1;
-            response.data[0] = bms_mode; // Respond with current mode
+        case SSP_CMD_GM: /* Handle get mode command */
+            response.cmd_id = SSP_CMD_ACK | SSP_FRAME_TYPE_REPLY; /* Set ACK response */
+            response.data_len = 1; /* Set data length */
+            response.data[0] = bms_mode; /* Set current mode */
             break;
-
-        case SSP_CMD_GOSTM: // 0x25: Get operational status (telemetry)
-            SSP_SendStatus(); // Send telemetry, no additional response needed
-            return;
-
-        case SSP_CMD_SFP: // 0x1B: Set flight parameter
-            if (frame->data_len >= 2) { // Expect param_id and param_value
-                uint8_t param_id = frame->data[0];
-                uint8_t param_value = frame->data[1];
-                if (param_id == 0x01) { // Set mission termination enable
-                    mission_termination_enabled = param_value;
-                    response.cmd_id = SSP_CMD_ACK | SSP_FRAME_TYPE_REPLY;
-                    Log_Error("Mission termination enable set");
+        case SSP_CMD_GOSTM: /* Handle get status command */
+            SSP_SendStatus(); /* Send telemetry */
+            return; /* Exit without response */
+        case SSP_CMD_SFP: /* Handle set flight parameter */
+            if (frame->data_len >= 2) { /* Check data length */
+                uint8_t param_id = frame->data[0]; /* Get parameter ID */
+                uint8_t param_value = frame->data[1]; /* Get parameter value */
+                if (param_id == 0x01) { /* Check mission termination parameter */
+                    mission_termination_enabled = param_value; /* Set termination flag */
+                    response.cmd_id = SSP_CMD_ACK | SSP_FRAME_TYPE_REPLY; /* Set ACK response */
+                    Log_Error("Mission termination enable set"); /* Log action */
                 }
-                else if (param_id == 0x02) { // Request firmware update
-                    if (param_value == 1) {
-                        // Set firmware update flag in flash and reboot
-                        HAL_FLASH_Unlock();
-                        Flash_Erase(FLASH_LOG_PAGE);
-                        HAL_FLASH_Program(FLASH_TYPEPROGRAM_DOUBLEWORD, FIRMWARE_UPDATE_FLAG_ADDR, 0xDEADBEEF);
-                        HAL_FLASH_Lock();
-                        Log_Error("Firmware update requested, rebooting...");
-                        HAL_Delay(100);
-                        HAL_NVIC_SystemReset();
+                else if (param_id == 0x02) { /* Check firmware update request */
+                    if (param_value == 1) { /* Check update requested */
+                        HAL_FLASH_Unlock(); /* Unlock flash */
+                        Flash_Erase(FLASH_LOG_PAGE); /* Erase log page */
+                        HAL_FLASH_Program(FLASH_TYPEPROGRAM_DOUBLEWORD, FIRMWARE_UPDATE_FLAG_ADDR, 0xDEADBEEF); /* Set update flag */
+                        HAL_FLASH_Lock(); /* Lock flash */
+                        Log_Error("Firmware update requested, rebooting..."); /* Log action */
+                        HAL_Delay(100); /* Wait 100 ms */
+                        HAL_NVIC_SystemReset(); /* Reset microcontroller */
                     }
-                    response.cmd_id = SSP_CMD_ACK | SSP_FRAME_TYPE_REPLY;
+                    response.cmd_id = SSP_CMD_ACK | SSP_FRAME_TYPE_REPLY; /* Set ACK response */
                 }
                 else {
-                    response.cmd_id = SSP_CMD_NACK | SSP_FRAME_TYPE_REPLY; // Unknown parameter
+                    response.cmd_id = SSP_CMD_NACK | SSP_FRAME_TYPE_REPLY; /* Set NACK response */
                 }
             } else {
-                response.cmd_id = SSP_CMD_NACK | SSP_FRAME_TYPE_REPLY; // Invalid data length
+                response.cmd_id = SSP_CMD_NACK | SSP_FRAME_TYPE_REPLY; /* Set NACK response */
             }
             break;
-
-        case SSP_CMD_GSTLM: // 0x22: Get short telemetry
-        case SSP_CMD_GOTLM: // 0x21: Get operational telemetry
-            SSP_SendStatus(); // Send telemetry, no additional response needed
-            return;
-
-        default: // Unknown command
-            response.cmd_id = SSP_CMD_NACK | SSP_FRAME_TYPE_REPLY;
+        case SSP_CMD_GSTLM: /* Handle get short telemetry */
+        case SSP_CMD_GOTLM: /* Handle get operational telemetry */
+            SSP_SendStatus(); /* Send telemetry */
+            return; /* Exit without response */
+        default: /* Handle unknown command */
+            response.cmd_id = SSP_CMD_NACK | SSP_FRAME_TYPE_REPLY; /* Set NACK response */
             break;
     }
-
-    // Send the response frame
-    uint16_t frame_len;
-    SSP_ConstructFrame(&response, ssp_tx_buffer, &frame_len);
-    HAL_GPIO_WritePin(RS4852_DE_GPIO_Port, RS4852_DE_Pin, GPIO_PIN_SET); // Enable RS485 transmit
-    SSP_TransmitFrame(&husart2, ssp_tx_buffer, frame_len);
-    HAL_GPIO_WritePin(RS4852_DE_GPIO_Port, RS4852_DE_Pin, GPIO_PIN_RESET); // Disable RS485 transmit
+    uint16_t frame_len; /* Create variable for response frame length */
+    SSP_ConstructFrame(&response, ssp_tx_buffer, &frame_len); /* Build response frame */
+    HAL_GPIO_WritePin(RS4852_DE_GPIO_Port, RS4852_DE_Pin, GPIO_PIN_SET); /* Set DE pin to transmit */
+    SSP_TransmitFrame(&huart2, ssp_tx_buffer, frame_len); /* Send response */
+    HAL_GPIO_WritePin(RS4852_DE_GPIO_Port, RS4852_DE_Pin, GPIO_PIN_RESET); /* Set DE pin to receive */
 }
 
-/**
-  * @brief  Implements the Constant Current - Constant Voltage (CC-CV) charging algorithm.
-  * @retval HAL_StatusTypeDef: HAL_OK on success, HAL_ERROR if temperature exceeds limits or I2C fails.
-  * @note   - Switches between CC and CV modes based on cell voltages.
-  *         - Includes safety checks for overtemperature conditions.
-  *         - Controls a charging enable pin (GPIOE Pin 11) to manage the charging circuit.
-  *         - Uses `max_charge_time` to prevent overcharging.
-  * @context Called in the main loop (`main`) when the BMS is in charging mode (`MODE_CHARGING`).
-  *          Ensures safe and efficient charging of the lithium-ion battery pack in the CubeSat,
-  *          balancing charge speed and battery longevity.
-  * @integration The STM32 uses I2C to read temperatures (`Temperature_Read`) and GPIO to control
-  *              the charging circuit. The CC-CV algorithm leverages voltage readings from the BQ76920
-  *              ICs to manage charging phases, integrating with the overall BMS state machine.
-  * @debug  - If charging fails (HAL_ERROR), check I2C communication with temperature sensors and
-  *           ensure GPIOE Pin 11 is correctly configured.
-  *         - If the BMS does not transition to CV mode, verify cell voltage readings (`group_voltages_1/2`)
-  *           and the `cv_threshold` value in `battery_config`.
-  *         - Monitor `charge_duration` to ensure the timeout mechanism works as expected.
-  */
+
+/* Define function to read the STM32’s internal temperature sensor
+ * Inputs: None
+ * Returns: int16_t, the temperature in degrees Celsius, calculated from the ADC reading
+ *          of the STM32’s internal temperature sensor. The value is typically between
+ *          -40°C and 125°C, representing the PCB temperature.
+ * What it does: Uses ADC1 to read the STM32’s internal temperature sensor, converts the
+ *               raw ADC value to degrees Celsius, and returns it for use in fault detection
+ *               (e.g., overtemperature checks in main.c).
+ */
+int16_t Read_Internal_Temperature(void) {
+    HAL_ADC_Start(&hadc1); /* Start ADC1 to begin temperature measurement */
+    HAL_ADC_PollForConversion(&hadc1, HAL_MAX_DELAY); /* Wait until ADC conversion is complete */
+    uint32_t raw = HAL_ADC_GetValue(&hadc1); /* Get the raw ADC value (0 to 4095) */
+    HAL_ADC_Stop(&hadc1); /* Stop ADC1 to save power */
+    int32_t temp = ((raw * 3300 / 4096) - 760) * 100 / 250 + 25; /* Convert raw value to °C using STM32 formula */
+    return (int16_t)temp; /* Cast result to 16-bit integer and return */
+}
+
+/* Define function to update the BMS operating mode
+ * Inputs: None
+ * Returns: void, meaning it returns nothing; it modifies global variables (bms_mode,
+ *          charge_enabled, discharge_enabled, error_flags) and applies settings to
+ *          BQ76920 ICs.
+ * What it does: Checks for faults (e.g., overvoltage, overtemperature) and sets the BMS
+ *               mode (fault, charging, discharging, sleep) based on error flags, SOC,
+ *               and current. It adjusts charging/discharging states and logs actions for
+ *               diagnostics, sent to the OBC via RS485.
+ */
+void Update_BMS_Mode(void) {
+    static uint32_t fault_start_time = 0; /* Create static variable to track when a fault starts (in ms) */
+    static uint8_t in_fault_mode = 0; /* Create static flag to indicate if BMS is in fault mode (1 = yes, 0 = no) */
+    static uint8_t recovery_attempts = 0; /* Create static counter for recovery attempts */
+    static const uint8_t MAX_RECOVERY_ATTEMPTS = 3; /* Define constant for max recovery attempts (3) */
+    static const uint32_t FAULT_TIMEOUT = 30000; /* Define constant for fault timeout (30 seconds) */
+    static const uint32_t TEMP_FAULT_TIMEOUT = 60000; /* Define constant for temperature fault timeout (60 seconds) */
+    static const uint32_t COOLDOWN_PERIOD = 10000; /* Define constant for cooldown period (10 seconds) */
+    static const uint32_t RECOVERY_DELAY = 5000; /* Define constant for recovery delay (5 seconds) */
+    if (error_flags & (ERROR_OVERVOLTAGE | ERROR_UNDERVOLTAGE | ERROR_OCC | ERROR_OCD | ERROR_SCD | ERROR_OVERTEMP | ERROR_UNDERTEMP | ERROR_DISCREPANCY | ERROR_DEVICE_XREADY | ERROR_OVRD_ALERT)) { /* Check if any fault flags are set */
+        if (!in_fault_mode) { /* Check if not already in fault mode */
+            fault_start_time = HAL_GetTick(); /* Record current system time (ms) */
+            in_fault_mode = 1; /* Set flag to indicate fault mode */
+        }
+        bms_mode = MODE_FAULT; /* Set BMS mode to fault */
+        if (error_flags & ERROR_OVERVOLTAGE) { /* Check for overvoltage fault */
+            charge_enabled = 0; /* Disable charging to protect battery */
+            discharge_enabled = 1; /* Enable discharging to reduce voltage */
+            Log_Error("Protective action: Disabled charging due to overvoltage"); /* Log action for diagnostics */
+            uint8_t all_below_threshold = 1; /* Create flag to check if all cells are safe */
+            for (uint8_t i = 0; i < NUM_GROUPS_PER_IC; i++) { /* Loop through all 4 cells */
+                if (group_voltages_1[i] > battery_config.ov_threshold || group_voltages_2[i] > battery_config.ov_threshold) { /* Check if any cell exceeds threshold */
+                    all_below_threshold = 0; /* Clear flag if any cell is over threshold */
+                    break; /* Exit loop early */
+                }
+            }
+            if (all_below_threshold) { /* Check if all cells are below threshold */
+                Log_Error("Overvoltage fault cleared"); /* Log fault clearance */
+                error_flags &= ~ERROR_OVERVOLTAGE; /* Clear overvoltage flag */
+                in_fault_mode = 0; /* Exit fault mode */
+            }
+            else if (HAL_GetTick() - fault_start_time >= FAULT_TIMEOUT) { /* Check if fault persists for 30 seconds */
+                Log_Error("Overvoltage fault persists, triggering system reset"); /* Log persistent fault */
+                HAL_NVIC_SystemReset(); /* Reset microcontroller to recover */
+            }
+        }
+        else if (error_flags & ERROR_UNDERVOLTAGE) { /* Check for undervoltage fault */
+            charge_enabled = 1; /* Enable charging to increase voltage */
+            discharge_enabled = 0; /* Disable discharging to prevent damage */
+            Log_Error("Protective action: Disabled discharging due to undervoltage"); /* Log action */
+            uint8_t all_above_threshold = 1; /* Create flag to check if all cells are safe */
+            for (uint8_t i = 0; i < NUM_GROUPS_PER_IC; i++) { /* Loop through all cells */
+                if (group_voltages_1[i] < battery_config.uv_threshold || group_voltages_2[i] < battery_config.uv_threshold) { /* Check if any cell is below threshold */
+                    all_above_threshold = 0; /* Clear flag if any cell is below threshold */
+                    break; /* Exit loop early */
+                }
+            }
+            if (all_above_threshold) { /* Check if all cells are above threshold */
+                Log_Error("Undervoltage fault cleared"); /* Log fault clearance */
+                error_flags &= ~ERROR_UNDERVOLTAGE; /* Clear undervoltage flag */
+                in_fault_mode = 0; /* Exit fault mode */
+            }
+            else if (HAL_GetTick() - fault_start_time >= FAULT_TIMEOUT) { /* Check if fault persists for 30 seconds */
+                Log_Error("Undervoltage fault persists, triggering system reset"); /* Log persistent fault */
+                HAL_NVIC_SystemReset(); /* Reset microcontroller */
+            }
+        }
+        else if (error_flags & ERROR_OCC) { /* Check for overcurrent charging fault */
+            charge_enabled = 0; /* Disable charging to protect battery */
+            discharge_enabled = 1; /* Enable discharging */
+            Log_Error("Protective action: Disabled charging due to overcurrent charge"); /* Log action */
+            if (HAL_GetTick() - fault_start_time >= COOLDOWN_PERIOD) { /* Wait for 10-second cooldown */
+                int16_t total_current = (pack_current_1 + pack_current_2) / 2; /* Calculate average current */
+                if (total_current >= 0) { /* Check if current is safe (non-negative) */
+                    Log_Error("Overcurrent charge fault cleared"); /* Log fault clearance */
+                    error_flags &= ~ERROR_OCC; /* Clear overcurrent charge flag */
+                    in_fault_mode = 0; /* Exit fault mode */
+                }
+                else if (HAL_GetTick() - fault_start_time >= FAULT_TIMEOUT) { /* Check if fault persists for 30 seconds */
+                    Log_Error("Overcurrent charge fault persists, triggering system reset"); /* Log persistent fault */
+                    HAL_NVIC_SystemReset(); /* Reset microcontroller */
+                }
+            }
+        }
+        else if (error_flags & ERROR_OCD) { /* Check for overcurrent discharging fault */
+            charge_enabled = 1; /* Enable charging */
+            discharge_enabled = 0; /* Disable discharging to protect battery */
+            Log_Error("Protective action: Disabled discharging due to overcurrent discharge"); /* Log action */
+            if (HAL_GetTick() - fault_start_time >= COOLDOWN_PERIOD) { /* Wait for 10-second cooldown */
+                int16_t total_current = (pack_current_1 + pack_current_2) / 2; /* Calculate average current */
+                if (total_current <= 0) { /* Check if current is safe (non-positive) */
+                    Log_Error("Overcurrent discharge fault cleared"); /* Log fault clearance */
+                    error_flags &= ~ERROR_OCD; /* Clear overcurrent discharge flag */
+                    in_fault_mode = 0; /* Exit fault mode */
+                }
+                else if (HAL_GetTick() - fault_start_time >= FAULT_TIMEOUT) { /* Check if fault persists for 30 seconds */
+                    Log_Error("Overcurrent discharge fault persists, triggering system reset"); /* Log persistent fault */
+                    HAL_NVIC_SystemReset(); /* Reset microcontroller */
+                }
+            }
+        }
+        else if (error_flags & ERROR_SCD) { /* Check for short-circuit discharge fault */
+            charge_enabled = 0; /* Disable charging */
+            discharge_enabled = 0; /* Disable discharging to protect system */
+            Log_Error("Protective action: Disabled charging and discharging due to short-circuit discharge"); /* Log action */
+            if (HAL_GetTick() - fault_start_time >= FAULT_TIMEOUT) { /* Wait for 30-second timeout */
+                uint8_t status1, status2; /* Create variables to store BQ76920 status */
+                uint8_t scd_cleared = 1; /* Create flag to track if short-circuit is cleared */
+                if (BQ76920_ReadStatus(&hi2c1, &status1) == HAL_OK && (status1 & (1 << 3))) { /* Check short-circuit bit on first IC */
+                    scd_cleared = 0; /* Clear flag if fault is active */
+                }
+                if (BQ76920_ReadStatus(&hi2c2, &status2) == HAL_OK && (status2 & (1 << 3))) { /* Check short-circuit bit on second IC */
+                    scd_cleared = 0; /* Clear flag if fault is active */
+                }
+                if (scd_cleared) { /* Check if fault is cleared */
+                    Log_Error("Short-circuit discharge fault cleared"); /* Log fault clearance */
+                    error_flags &= ~ERROR_SCD; /* Clear short-circuit flag */
+                    in_fault_mode = 0; /* Exit fault mode */
+                }
+                else { /* If fault persists */
+                    Log_Error("Short-circuit discharge fault persists, triggering system reset"); /* Log persistent fault */
+                    HAL_NVIC_SystemReset(); /* Reset microcontroller */
+                }
+            }
+        }
+        else if (error_flags & ERROR_OVERTEMP) { /* Check for overtemperature fault */
+            charge_enabled = 0; /* Disable charging */
+            discharge_enabled = 0; /* Disable discharging to protect battery */
+            Log_Error("Protective action: Disabled charging and discharging due to overtemperature"); /* Log action */
+            if (temperature_1 < (battery_config.overtemp_threshold - 10) && temperature_2 < (battery_config.overtemp_threshold - 10) && pcb_temperature < (battery_config.overtemp_threshold - 10)) { /* Check temperatures with 10°C hysteresis */
+                Log_Error("Overtemperature fault cleared"); /* Log fault clearance */
+                error_flags &= ~ERROR_OVERTEMP; /* Clear overtemperature flag */
+                in_fault_mode = 0; /* Exit fault mode */
+            }
+            else if (HAL_GetTick() - fault_start_time >= TEMP_FAULT_TIMEOUT) { /* Check if fault persists for 60 seconds */
+                Log_Error("Overtemperature fault persists, triggering system reset"); /* Log persistent fault */
+                HAL_NVIC_SystemReset(); /* Reset microcontroller */
+            }
+        }
+        else if (error_flags & ERROR_UNDERTEMP) { /* Check for undertemperature fault */
+            charge_enabled = 0; /* Disable charging to prevent damage */
+            discharge_enabled = 1; /* Enable discharging */
+            Log_Error("Protective action: Disabled charging due to undertemperature"); /* Log action */
+            if (temperature_1 > (battery_config.undertemp_threshold + 10) && temperature_2 > (battery_config.undertemp_threshold + 10)) { /* Check temperatures with 10°C hysteresis */
+                Log_Error("Undertemperature fault cleared"); /* Log fault clearance */
+                error_flags &= ~ERROR_UNDERTEMP; /* Clear undertemperature flag */
+                in_fault_mode = 0; /* Exit fault mode */
+            }
+            else if (HAL_GetTick() - fault_start_time >= TEMP_FAULT_TIMEOUT) { /* Check if fault persists for 60 seconds */
+                Log_Error("Undertemperature fault persists, triggering system reset"); /* Log persistent fault */
+                HAL_NVIC_SystemReset(); /* Reset microcontroller */
+            }
+        }
+        else if (error_flags & ERROR_DISCREPANCY) { /* Check for redundancy discrepancy between ICs */
+            charge_enabled = 0; /* Disable charging */
+            discharge_enabled = 0; /* Disable discharging to protect system */
+            Log_Error("Protective action: Disabled charging and discharging due Wise to redundancy discrepancy"); /* Log action */
+            if (HAL_GetTick() - fault_start_time >= RECOVERY_DELAY) { /* Wait for 5-second recovery delay */
+                Log_Error("Attempting to reinitialize BQ76920 ICs to resolve discrepancy"); /* Log recovery attempt */
+                if (BQ76920_Init(&hi2c1) != HAL_OK) { /* Try reinitializing first IC */
+                    Log_Error("Failed to reinitialize BQ76920 (I2C1)"); /* Log failure */
+                }
+                if (BQ76920_Init(&hi2c2) != HAL_OK) { /* Try reinitializing second IC */
+                    Log_Error("Failed to reinitialize BQ76920 (I2C2)"); /* Log failure */
+                }
+                uint8_t discrepancy_flag = 0; /* Create flag for discrepancy check */
+                BQ76920_CheckRedundancy(group_voltages_1, group_voltages_2, pack_current_1, pack_current_2, &discrepancy_flag); /* Check redundancy */
+                if (!discrepancy_flag) { /* Check if discrepancy is resolved */
+                    Log_Error("Redundancy discrepancy fault cleared"); /* Log fault clearance */
+                    error_flags &= ~ERROR_DISCREPANCY; /* Clear discrepancy flag */
+                    in_fault_mode = 0; /* Exit fault mode */
+                }
+                else if (HAL_GetTick() - fault_start_time >= FAULT_TIMEOUT) { /* Check if fault persists for 30 seconds */
+                    Log_Error("Redundancy discrepancy fault persists, triggering system reset"); /* Log persistent fault */
+                    HAL_NVIC_SystemReset(); /* Reset microcontroller */
+                }
+            }
+        }
+        else if (error_flags & ERROR_DEVICE_XREADY) { /* Check for BQ76920 initialization fault */
+            charge_enabled = 0; /* Disable charging */
+            discharge_enabled = 0; /* Disable discharging */
+            Log_Error("Protective action: Disabled charging and discharging due to DEVICE_XREADY"); /* Log action */
+            if (HAL_GetTick() - fault_start_time >= RECOVERY_DELAY) { /* Wait for 5-second recovery delay */
+                recovery_attempts++; /* Increment recovery attempt counter */
+                Log_Error("Attempting to reinitialize BQ76920 ICs (attempt %d)", recovery_attempts); /* Log attempt */
+                uint8_t init_success = 1; /* Create flag for initialization success */
+                if (BQ76920_Init(&hi2c1) != HAL_OK) { /* Reinitialize first IC */
+                    Log_Error("Failed to reinitialize BQ76920 (I2C1)"); /* Log failure */
+                    init_success = 0; /* Clear success flag */
+                }
+                if (BQ76920_Init(&hi2c2) != HAL_OK) { /* Reinitialize second IC */
+                    Log_Error("Failed to reinitialize BQ76920 (I2C2)"); /* Log failure */
+                    init_success = 0; /* Clear success flag */
+                }
+                if (init_success) { /* Check if initialization succeeded */
+                    Log_Error("DEVICE_XREADY fault cleared"); /* Log fault clearance */
+                    error_flags &= ~ERROR_DEVICE_XREADY; /* Clear fault flag */
+                    in_fault_mode = 0; /* Exit fault mode */
+                    recovery_attempts = 0; /* Reset attempt counter */
+                }
+                else if (recovery_attempts >= MAX_RECOVERY_ATTEMPTS) { /* Check if max attempts reached */
+                    Log_Error("Failed to recover from DEVICE_XREADY after %d attempts, triggering system reset", MAX_RECOVERY_ATTEMPTS); /* Log failure */
+                    HAL_NVIC_SystemReset(); /* Reset microcontroller */
+                }
+            }
+        }
+        else if (error_flags & ERROR_OVRD_ALERT) { /* Check for general BQ76920 alert */
+            charge_enabled = 0; /* Disable charging */
+            discharge_enabled = 0; /* Disable discharging */
+            Log_Error("Protective action: Disabled charging and discharging due to OVRD_ALERT"); /* Log action */
+            if (HAL_GetTick() - fault_start_time >= COOLDOWN_PERIOD) { /* Wait for 10-second cooldown */
+                uint8_t status1, status2; /* Create variables for BQ76920 status */
+                uint8_t alert_cleared = 1; /* Create flag for alert clearance */
+                if (BQ76920_ReadStatus(&hi2c1, &status1) == HAL_OK && (status1 & (1 << 6))) { /* Check alert bit on first IC */
+                    alert_cleared = 0; /* Clear flag if alert is active */
+                }
+                if (BQ76920_ReadStatus(&hi2c2, &status2) == HAL_OK && (status2 & (1 << 6))) { /* Check alert bit on second IC */
+                    alert_cleared = 0; /* Clear flag if alert is active */
+                }
+                if (alert_cleared) { /* Check if alert is cleared */
+                    Log_Error("OVRD_ALERT fault cleared"); /* Log fault clearance */
+                    error_flags &= ~ERROR_OVRD_ALERT; /* Clear alert flag */
+                    in_fault_mode = 0; /* Exit fault mode */
+                }
+                else if (HAL_GetTick() - fault_start_time >= FAULT_TIMEOUT) { /* Check if fault persists for 30 seconds */
+                    Log_Error("OVRD_ALERT fault persists, triggering system reset"); /* Log persistent fault */
+                    HAL_NVIC_SystemReset(); /* Reset microcontroller */
+                }
+            }
+        }
+        BQ76920_SetChargeEnable(&hi2c1, charge_enabled, discharge_enabled); /* Apply charge/discharge settings to first IC */
+        BQ76920_SetChargeEnable(&hi2c2, charge_enabled, discharge_enabled); /* Apply charge/discharge settings to second IC */
+        return; /* Exit function if in fault mode */
+    }
+    in_fault_mode = 0; /* Reset fault mode flag */
+    recovery_attempts = 0; /* Reset recovery attempt counter */
+    charge_immediately = (soc < battery_config.soc_low_threshold) ? 1 : 0; /* Set charge flag if SOC is below 20% */
+    int16_t total_current = (pack_current_1 + pack_current_2) / 2; /* Calculate average current from both ICs */
+    if (total_current < 0) { /* Check if current is negative (charging) */
+        bms_mode = MODE_CHARGING; /* Set BMS to charging mode */
+        charge_enabled = 1; /* Enable charging */
+        discharge_enabled = 0; /* Disable discharging */
+    } else if (total_current > 0) { /* Check if current is positive (discharging) */
+        bms_mode = MODE_DISCHARGING; /* Set BMS to discharging mode */
+        charge_enabled = 0; /* Disable charging */
+        discharge_enabled = 1; /* Enable discharging */
+    } else { /* If no current */
+        if (soc < battery_config.soc_low_threshold) { /* Check if SOC is below 20% */
+            bms_mode = MODE_CHARGING; /* Set BMS to charging mode */
+            charge_enabled = 1; /* Enable charging */
+            discharge_enabled = 0; /* Disable discharging */
+        } else { /* If SOC is sufficient */
+            bms_mode = MODE_SLEEP; /* Set BMS to sleep mode */
+            charge_enabled = 0; /* Disable charging */
+            discharge_enabled = 0; /* Disable discharging */
+        }
+    }
+    BQ76920_SetChargeEnable(&hi2c1, charge_enabled, discharge_enabled); /* Apply charge/discharge settings to first IC */
+    BQ76920_SetChargeEnable(&hi2c2, charge_enabled, discharge_enabled); /* Apply charge/discharge settings to second IC */
+}
+/* Define function to control battery charging
+ * Inputs: None
+ * Returns: HAL_StatusTypeDef, indicating success (HAL_OK) if charging is managed
+ *          successfully, or failure (HAL_ERROR) if temperature readings fail or
+ *          overtemperature is detected.
+ * What it does: Manages charging based on temperature and voltage, switching between
+ *               Constant Current and Constant Voltage modes.
+ */
 HAL_StatusTypeDef ChargeBattery(void)
 {
-    int16_t temperature_1, temperature_2; // Variables to store temperature readings
-    HAL_StatusTypeDef status;
-
-    // Read temperatures from both NTC sensors
-    status = Temperature_Read(&hi2c1, &hi2c2, &temperature_1, &temperature_2);
-    if (status != HAL_OK || temperature_1 == INT16_MIN || temperature_2 == INT16_MIN)
-    {
-        // Disable charging if temperature reading fails
-        HAL_GPIO_WritePin(GPIOE, GPIO_PIN_11, GPIO_PIN_RESET);
-        in_cv_mode = 0;         // Reset CV mode
-        charge_start_time = 0;  // Reset charging timer
-        return HAL_ERROR;
+    int16_t temperature_1, temperature_2; /* Create variables for temperatures */
+    HAL_StatusTypeDef status; /* Create variable for status */
+    status = Temperature_Read(&hi2c1, &hi2c2, &temperature_1, &temperature_2); /* Read NTC temperatures */
+    if (status != HAL_OK || temperature_1 == INT16_MIN || temperature_2 == INT16_MIN) { /* Check for errors */
+        HAL_GPIO_WritePin(GPIOE, GPIO_PIN_11, GPIO_PIN_RESET); /* Disable charging */
+        in_cv_mode = 0; /* Reset CV mode */
+        charge_start_time = 0; /* Reset charge timer */
+        return HAL_ERROR; /* Return error */
     }
-
-    // Use the highest temperature for safety checks
-    int16_t highest_temp = (temperature_1 > temperature_2) ? temperature_1 : temperature_2;
-
-    // Check for overtemperature condition (battery or PCB)
-    if (highest_temp > battery_config.overtemp_threshold || pcb_temperature > battery_config.overtemp_threshold)
-    {
-        // Disable charging if temperature exceeds limits
-        HAL_GPIO_WritePin(GPIOE, GPIO_PIN_11, GPIO_PIN_RESET);
-        in_cv_mode = 0;         // Reset CV mode
-        charge_start_time = 0;  // Reset charging timer
-        return HAL_ERROR;
+    int16_t highest_temp = (temperature_1 > temperature_2) ? temperature_1 : temperature_2; /* Select higher temperature */
+    if (highest_temp > battery_config.overtemp_threshold || pcb_temperature > battery_config.overtemp_threshold) { /* Check overtemperature */
+        HAL_GPIO_WritePin(GPIOE, GPIO_PIN_11, GPIO_PIN_RESET); /* Disable charging */
+        in_cv_mode = 0; /* Reset CV mode */
+        charge_start_time = 0; /* Reset charge timer */
+        return HAL_ERROR; /* Return error */
     }
-
-    // CC-CV charging logic
-    if (!in_cv_mode)
-    {
-        // Constant Current (CC) mode
-        if (charge_start_time == 0)
-        {
-            charge_start_time = HAL_GetTick(); // Start charging timer
+    if (!in_cv_mode) { /* Check if in CC mode */
+        if (charge_start_time == 0) { /* Check if charging started */
+            charge_start_time = HAL_GetTick(); /* Record start time */
         }
-
-        // Check for transition to Constant Voltage (CV) mode
-        int16_t max_voltage = 0;
-        // Find the maximum cell voltage across both ICs
-        for (uint8_t i = 0; i < NUM_GROUPS_PER_IC; i++)
-        {
-            if (group_voltages_1[i] > max_voltage) max_voltage = group_voltages_1[i];
-            if (group_voltages_2[i] > max_voltage) max_voltage = group_voltages_2[i];
+        int16_t max_voltage = 0; /* Create variable for max cell voltage */
+        for (uint8_t i = 0; i < NUM_GROUPS_PER_IC; i++) { /* Loop through cells */
+            if (group_voltages_1[i] > max_voltage) max_voltage = group_voltages_1[i]; /* Update max */
+            if (group_voltages_2[i] > max_voltage) max_voltage = group_voltages_2[i]; /* Update max */
         }
-        if (max_voltage > battery_config.cv_threshold)
-        {
-            in_cv_mode = 1; // Transition to CV mode
+        if (max_voltage > battery_config.cv_threshold) { /* Check CV threshold */
+            in_cv_mode = 1; /* Switch to CV mode */
         }
     }
-    else
-    {
-        // Constant Voltage (CV) mode: Check for timeout
-        uint32_t charge_duration = (HAL_GetTick() - charge_start_time) / 1000; // Duration in seconds
-        if (charge_duration > battery_config.max_charge_time)
-        {
-            // Disable charging if maximum charge time is exceeded
-            HAL_GPIO_WritePin(GPIOE, GPIO_PIN_11, GPIO_PIN_RESET);
-            in_cv_mode = 0;         // Reset CV mode
-            charge_start_time = 0;  // Reset charging timer
+    else { /* In CV mode */
+        uint32_t charge_duration = (HAL_GetTick() - charge_start_time) / 1000; /* Calculate charge duration */
+        if (charge_duration > battery_config.max_charge_time) { /* Check max charge time */
+            HAL_GPIO_WritePin(GPIOE, GPIO_PIN_11, GPIO_PIN_RESET); /* Disable charging */
+            in_cv_mode = 0; /* Reset CV mode */
+            charge_start_time = 0; /* Reset charge timer */
         }
     }
-
-    return HAL_OK; // Charging successful
+    return HAL_OK; /* Return success */
 }
 
-/**
-  * @brief  Checks if the system should enter bootloader mode for a firmware update.
-  * @retval None (sets global `firmware_update_mode` and logs action).
-  * @note   - Reads a firmware update flag (0xDEADBEEF) from flash (`FIRMWARE_UPDATE_FLAG_ADDR`).
-  *         - If set, enters update mode and clears the flag to prevent re-entry.
-  *         - Logs the decision for diagnostics.
-  * @context Called during system startup in `main` to determine if a firmware update is requested
-  *          (e.g., via SSP CMD_SFP). Firmware updates are critical for CubeSat maintenance and upgrades
-  *          in orbit, allowing bug fixes or new features to be deployed.
-  * @integration The STM32 uses flash memory to store the update flag persistently, ensuring the update
-  *              request survives reboots. The bootloader mode interacts with `Bootloader_FirmwareUpdate`
-  *              to handle the update process.
-  * @debug  - If the system does not enter update mode when expected, check the flash address
-  *           (`FIRMWARE_UPDATE_FLAG_ADDR`) and ensure the SFP command sets the correct value (0xDEADBEEF).
-  *         - Verify that flash write operations succeed (`Flash_Erase`, `HAL_FLASH_Program`).
-  */
+/* Define function to check for firmware update mode
+ * Inputs: None
+ * Returns: void, meaning it returns nothing; it sets firmware_update_mode and performs actions.
+ * What it does: Checks a flash flag to enter firmware update mode or normal operation.
+ */
 void Bootloader_Check(void)
 {
-    // Read the firmware update flag from flash
-    uint32_t firmware_update_flag = *(volatile uint32_t *)FIRMWARE_UPDATE_FLAG_ADDR;
-
-    if (firmware_update_flag == 0xDEADBEEF)
-    {
-        firmware_update_mode = 1; // Set update mode
-        Log_Error("Entering firmware update mode");
-
-        // Clear the flag to prevent re-entry after update
-        HAL_FLASH_Unlock();
-        Flash_Erase(FLASH_LOG_PAGE);
-        HAL_FLASH_Program(FLASH_TYPEPROGRAM_DOUBLEWORD, FIRMWARE_UPDATE_FLAG_ADDR, 0xFFFFFFFF);
-        HAL_FLASH_Lock();
+    uint32_t firmware_update_flag = *(volatile uint32_t *)FIRMWARE_UPDATE_FLAG_ADDR; /* Read update flag */
+    if (firmware_update_flag == 0xDEADBEEF) { /* Check for update mode */
+        firmware_update_mode = 1; /* Set update mode */
+        Log_Error("Entering firmware update mode"); /* Log action */
+        HAL_FLASH_Unlock(); /* Unlock flash */
+        Flash_Erase(FLASH_LOG_PAGE); /* Erase log page */
+        HAL_FLASH_Program(FLASH_TYPEPROGRAM_DOUBLEWORD, FIRMWARE_UPDATE_FLAG_ADDR, 0xFFFFFFFF); /* Clear flag */
+        HAL_FLASH_Lock(); /* Lock flash */
     }
-    else
-    {
-        firmware_update_mode = 0; // Normal operation mode
-        Log_Error("Booting to application");
+    else { /* Normal mode */
+        firmware_update_mode = 0; /* Clear update mode */
+        Log_Error("Booting to application"); /* Log action */
     }
 }
 
-/**
-  * @brief  Handles the firmware update process over RS485.
-  * @retval None (receives firmware packets, writes to flash, and reboots).
-  * @note   - Receives firmware packets via SSP (CMD_FIRMWARE_UPDATE), each up to 128 bytes.
-  *         - Erases the application flash region (`APP_START_ADDR` to `APP_END_ADDR`).
-  *         - Writes packets to flash, verifies CRC, and sets a validity flag on completion.
-  *         - Times out after 10 seconds (`FIRMWARE_UPDATE_TIMEOUT`) if no packets are received.
-  * @context Called in `main` if `firmware_update_mode` is set, allowing the OBC to update the BMS
-  *          firmware in orbit. Firmware updates are essential for fixing bugs or adding features
-  *          in a CubeSat without physical access.
-  * @integration The STM32 uses USART2 (RS485) to receive packets (`SSP_ReceiveFrame`) and flash
-  *              memory to store the new firmware. CRC validation (`CalculateCRC16`) ensures data
-  *              integrity, and the validity flag (`APP_VALIDITY_FLAG_ADDR`) ensures safe booting.
-  * @debug  - If the update fails, check RS485 communication (DE pin, bus termination) and ensure
-  *           the OBC sends packets in the correct format (size, CRC).
-  *         - Verify flash write operations (`HAL_FLASH_Program`) and CRC calculation.
-  *         - Monitor logs (`Log_Error`) to trace progress and errors during the update.
-  */
+/* Define function to handle firmware updates
+ * Inputs: None
+ * Returns: void, meaning it returns nothing; it receives and writes firmware to flash.
+ * What it does: Receives firmware packets over RS485, writes them to flash, and verifies CRC.
+ */
 void Bootloader_FirmwareUpdate(void)
 {
-    SSP_FrameTypeDef received_frame = {0}; // Structure for received SSP frames
-    uint32_t last_packet_time = HAL_GetTick(); // Timestamp for timeout
-    uint32_t current_address = APP_START_ADDR; // Current flash address for writing
-    uint32_t total_bytes_received = 0;         // Total bytes received
-    uint32_t expected_firmware_size = 0;       // Expected firmware size (from first packet)
-    uint8_t firmware_buffer[FIRMWARE_UPDATE_PACKET_SIZE]; // Buffer for firmware packet data
-    uint16_t calculated_crc = 0xFFFF;         // CRC accumulator for received data
-
-    Log_Error("Waiting for firmware update packets...");
-
-    // Erase the application flash region to prepare for new firmware
-    HAL_FLASH_Unlock();
-    for (uint32_t addr = APP_START_ADDR; addr < APP_END_ADDR; addr += FLASH_PAGE_SIZE) {
-        Flash_Erase((addr - FLASH_BASE) / FLASH_PAGE_SIZE);
+    SSP_FrameTypeDef received_frame = {0}; /* Create structure for received frame */
+    uint32_t last_packet_time = HAL_GetTick(); /* Record current time */
+    uint32_t current_address = APP_START_ADDR; /* Set start address for firmware */
+    uint32_t total_bytes_received = 0; /* Initialize received bytes counter */
+    uint32_t expected_firmware_size = 0; /* Initialize expected size */
+    uint8_t firmware_buffer[FIRMWARE_UPDATE_PACKET_SIZE]; /* Create buffer for firmware */
+    uint16_t calculated_crc = 0xFFFF; /* Initialize CRC */
+    Log_Error("Waiting for firmware update packets..."); /* Log start */
+    HAL_FLASH_Unlock(); /* Unlock flash */
+    for (uint32_t addr = APP_START_ADDR; addr < APP_END_ADDR; addr += FLASH_PAGE_SIZE) { /* Loop through flash */
+        Flash_Erase((addr - FLASH_BASE) / FLASH_PAGE_SIZE); /* Erase page */
     }
-    HAL_FLASH_Lock();
-
-    // Loop to receive and process firmware packets
-    while (1) {
-        // Check for timeout if no packets are received
-        if (HAL_GetTick() - last_packet_time > FIRMWARE_UPDATE_TIMEOUT) {
-            Log_Error("Firmware update timeout, rebooting...");
-            HAL_NVIC_SystemReset();
+    HAL_FLASH_Lock(); /* Lock flash */
+    while (1) { /* Infinite loop */
+        if (HAL_GetTick() - last_packet_time > FIRMWARE_UPDATE_TIMEOUT) { /* Check timeout */
+            Log_Error("Firmware update timeout, rebooting..."); /* Log timeout */
+            HAL_NVIC_SystemReset(); /* Reset microcontroller */
         }
-
-        // Receive an SSP frame
-        if (SSP_ReceiveFrame(&husart2, ssp_rx_buffer, SSP_MAX_FRAME_LEN, &received_frame) == HAL_OK) {
-            last_packet_time = HAL_GetTick(); // Update timestamp
-
-            // Filter frames: Ignore those not addressed to EPS or marked as replies
-            if (received_frame.dest != SSP_ADDR_EPS && received_frame.dest != SSP_ADDR_BROADCAST) {
-                continue;
+        if (SSP_ReceiveFrame(&huart2, ssp_rx_buffer, SSP_MAX_FRAME_LEN, &received_frame) == HAL_OK) { /* Check for frame */
+            last_packet_time = HAL_GetTick(); /* Update packet time */
+            if (received_frame.dest != SSP_ADDR_EPS && received_frame.dest != SSP_ADDR_BROADCAST) { /* Check destination */
+                continue; /* Skip if not for EPS */
             }
-            if (received_frame.cmd_id & SSP_FRAME_TYPE_REPLY) {
-                continue;
+            if (received_frame.cmd_id & SSP_FRAME_TYPE_REPLY) { /* Check if reply */
+                continue; /* Skip reply */
             }
-
-            // Prepare response frame
-            SSP_FrameTypeDef response = {0};
-            response.dest = received_frame.src;
-            response.src = SSP_ADDR_EPS;
-            response.data_len = 1;
-            response.data[0] = received_frame.cmd_id;
-
-            // Process firmware update command
-            switch (received_frame.cmd_id & 0x3F) {
-                case SSP_CMD_FIRMWARE_UPDATE:
-                    // First packet: Expect firmware size (4 bytes)
-                    if (received_frame.data_len < 4 && total_bytes_received == 0) {
-                        response.cmd_id = SSP_CMD_NACK | SSP_FRAME_TYPE_REPLY;
+            SSP_FrameTypeDef response = {0}; /* Create response frame */
+            response.dest = received_frame.src; /* Set response destination */
+            response.src = SSP_ADDR_EPS; /* Set response source */
+            response.data_len = 1; /* Set response data length */
+            response.data[0] = received_frame.cmd_id; /* Echo command ID */
+            switch (received_frame.cmd_id & 0x3F) { /* Process command */
+                case SSP_CMD_FIRMWARE_UPDATE: /* Handle firmware update */
+                    if (received_frame.data_len < 4 && total_bytes_received == 0) { /* Check first packet */
+                        response.cmd_id = SSP_CMD_NACK | SSP_FRAME_TYPE_REPLY; /* Set NACK */
                         break;
                     }
-
-                    if (total_bytes_received == 0) {
-                        // Extract expected firmware size from the first packet
-                        expected_firmware_size = (received_frame.data[0] << 24) |
-                                                 (received_frame.data[1] << 16) |
-                                                 (received_frame.data[2] << 8) |
-                                                 received_frame.data[3];
-                        Log_Error("Firmware update started, expected size: %lu bytes", expected_firmware_size);
-                        response.cmd_id = SSP_CMD_ACK | SSP_FRAME_TYPE_REPLY;
+                    if (total_bytes_received == 0) { /* Check first packet */
+                        expected_firmware_size = (received_frame.data[0] << 24) | (received_frame.data[1] << 16) | (received_frame.data[2] << 8) | received_frame.data[3]; /* Get size */
+                        Log_Error("Firmware update started, expected size: %lu bytes", expected_firmware_size); /* Log start */
+                        response.cmd_id = SSP_CMD_ACK | SSP_FRAME_TYPE_REPLY; /* Set ACK */
                     } else {
-                        // Subsequent packets: Validate size and process data
-                        if (received_frame.data_len > FIRMWARE_UPDATE_PACKET_SIZE) {
-                            response.cmd_id = SSP_CMD_NACK | SSP_FRAME_TYPE_REPLY;
+                        if (received_frame.data_len > FIRMWARE_UPDATE_PACKET_SIZE) { /* Check packet size */
+                            response.cmd_id = SSP_CMD_NACK | SSP_FRAME_TYPE_REPLY; /* Set NACK */
                             break;
                         }
-
-                        // Copy packet data to firmware buffer
-                        memcpy(firmware_buffer, received_frame.data, received_frame.data_len);
-
-                        // Write packet to flash in 8-byte chunks
-                        HAL_FLASH_Unlock();
-                        for (uint32_t i = 0; i < received_frame.data_len; i += 8) {
-                            uint64_t data = *(uint64_t *)(firmware_buffer + i);
-                            HAL_FLASH_Program(FLASH_TYPEPROGRAM_DOUBLEWORD, current_address + i, data);
+                        memcpy(firmware_buffer, received_frame.data, received_frame.data_len); /* Copy packet data */
+                        HAL_FLASH_Unlock(); /* Unlock flash */
+                        for (uint32_t i = 0; i < received_frame.data_len; i += 8) { /* Loop through data */
+                            uint64_t data = *(uint64_t *)(firmware_buffer + i); /* Get 8 bytes */
+                            HAL_FLASH_Program(FLASH_TYPEPROGRAM_DOUBLEWORD, current_address + i, data); /* Write to flash */
                         }
-                        HAL_FLASH_Lock();
-
-                        // Update CRC with the current packet
-                        calculated_crc = CalculateCRC16(firmware_buffer, received_frame.data_len);
-
-                        // Update tracking variables
-                        total_bytes_received += received_frame.data_len;
-                        current_address += received_frame.data_len;
-
-                        Log_Error("Received %lu/%lu bytes", total_bytes_received, expected_firmware_size);
-                        response.cmd_id = SSP_CMD_ACK | SSP_FRAME_TYPE_REPLY;
-
-                        // Complete update if all bytes received
-                        if (total_bytes_received >= expected_firmware_size) {
-                            // Verify CRC
-                            uint16_t received_crc = (firmware_buffer[received_frame.data_len - 2] << 8) |
-                                                    firmware_buffer[received_frame.data_len - 1];
-                            if (calculated_crc == received_crc) {
-                                // Set validity flag and store CRC
-                                HAL_FLASH_Unlock();
-                                HAL_FLASH_Program(FLASH_TYPEPROGRAM_DOUBLEWORD, APP_VALIDITY_FLAG_ADDR, 0xA5A5A5A5);
-                                uint64_t crc_data = calculated_crc;
-                                HAL_FLASH_Program(FLASH_TYPEPROGRAM_DOUBLEWORD, APP_END_ADDR - 8, crc_data);
-                                HAL_FLASH_Lock();
-                                Log_Error("Firmware update completed successfully, rebooting...");
-                                HAL_Delay(100);
-                                HAL_NVIC_SystemReset();
+                        HAL_FLASH_Lock(); /* Lock flash */
+                        calculated_crc = CalculateCRC16(firmware_buffer, received_frame.data_len); /* Update CRC */
+                        total_bytes_received += received_frame.data_len; /* Update byte count */
+                        current_address += received_frame.data_len; /* Update address */
+                        Log_Error("Received %lu/%lu bytes", total_bytes_received, expected_firmware_size); /* Log progress */
+                        response.cmd_id = SSP_CMD_ACK | SSP_FRAME_TYPE_REPLY; /* Set ACK */
+                        if (total_bytes_received >= expected_firmware_size) { /* Check if complete */
+                            uint16_t received_crc = (firmware_buffer[received_frame.data_len - 2] << 8) | firmware_buffer[received_frame.data_len - 1]; /* Get CRC */
+                            if (calculated_crc == received_crc) { /* Verify CRC */
+                                HAL_FLASH_Unlock(); /* Unlock flash */
+                                HAL_FLASH_Program(FLASH_TYPEPROGRAM_DOUBLEWORD, APP_VALIDITY_FLAG_ADDR, 0xA5A5A5A5); /* Set validity flag */
+                                uint64_t crc_data = calculated_crc; /* Store CRC */
+                                HAL_FLASH_Program(FLASH_TYPEPROGRAM_DOUBLEWORD, APP_END_ADDR - 8, crc_data); /* Write CRC */
+                                HAL_FLASH_Lock(); /* Lock flash */
+                                Log_Error("Firmware update completed successfully, rebooting..."); /* Log success */
+                                HAL_Delay(100); /* Wait 100 ms */
+                                HAL_NVIC_SystemReset(); /* Reset microcontroller */
                             } else {
-                                Log_Error("Firmware CRC16 mismatch, rebooting without setting validity flag...");
-                                HAL_Delay(100);
-                                HAL_NVIC_SystemReset();
+                                Log_Error("Firmware CRC16 mismatch, rebooting without setting validity flag..."); /* Log failure */
+                                HAL_Delay(100); /* Wait 100 ms */
+                                HAL_NVIC_SystemReset(); /* Reset microcontroller */
                             }
                         }
                     }
                     break;
-
-                default: // Unknown command
-                    response.cmd_id = SSP_CMD_NACK | SSP_FRAME_TYPE_REPLY;
+                default: /* Handle unknown command */
+                    response.cmd_id = SSP_CMD_NACK | SSP_FRAME_TYPE_REPLY; /* Set NACK */
                     break;
             }
-
-            // Send response frame
-            uint16_t frame_len;
-            SSP_ConstructFrame(&response, ssp_tx_buffer, &frame_len);
-            HAL_GPIO_WritePin(RS4852_DE_GPIO_Port, RS4852_DE_Pin, GPIO_PIN_SET);
-            SSP_TransmitFrame(&husart2, ssp_tx_buffer, frame_len);
-            HAL_GPIO_WritePin(RS4852_DE_GPIO_Port, RS4852_DE_Pin, GPIO_PIN_RESET);
+            uint16_t frame_len; /* Create variable for response frame length */
+            SSP_ConstructFrame(&response, ssp_tx_buffer, &frame_len); /* Build response */
+            HAL_GPIO_WritePin(RS4852_DE_GPIO_Port, RS4852_DE_Pin, GPIO_PIN_SET); /* Set DE pin to transmit */
+            SSP_TransmitFrame(&huart2, ssp_tx_buffer, frame_len); /* Send response */
+            HAL_GPIO_WritePin(RS4852_DE_GPIO_Port, RS4852_DE_Pin, GPIO_PIN_RESET); /* Set DE pin to receive */
         }
     }
 }
 
-/**
-  * @brief  Validates an application in flash and jumps to its reset handler.
-  * @param  start_addr: Starting address of the application in flash (e.g., `APP_START_ADDR` or `BACKUP_START_ADDR`).
-  * @retval uint8_t: 1 if the application is valid, 0 if invalid.
-  * @note   - Validates the application by checking its CRC and a validity flag (0xA5A5A5A5).
-  *         - CRC is stored at the end of the application region (`APP_END_ADDR - 8`).
-  * @context Called by `JumpToApplication` to verify the main or backup application before jumping.
-  *          Ensures the BMS boots into a valid application, critical for CubeSat reliability after
-  *          firmware updates or resets.
-  * @integration The STM32 uses flash memory to store the application and its metadata (CRC, validity flag).
-  *              The CRC check (`CalculateCRC16`) ensures the application’s integrity before execution.
-  * @debug  - If validation fails, check the CRC calculation (`CalculateCRC16`) and ensure the validity
-  *           flag and CRC are correctly written during firmware updates (`Bootloader_FirmwareUpdate`).
-  *         - Verify that `APP_START_ADDR` and `APP_END_ADDR` are correctly defined.
-  */
+/* Define function to validate application code
+ * Inputs:
+ * - start_addr: Starting address (uint32_t) of the application in flash to validate.
+ * Returns: uint8_t, returning 1 if the application is valid (CRC and flag match), 0 otherwise.
+ * What it does: Checks the application’s CRC and validity flag to ensure integrity.
+ */
 static uint8_t IsApplicationValid(uint32_t start_addr)
 {
-    // Calculate CRC of the application (excluding the last 8 bytes where CRC is stored)
-    uint16_t crc = CalculateCRC16((uint8_t *)start_addr, APP_END_ADDR - start_addr - 8);
-    // Read the stored CRC from flash
-    uint16_t stored_crc = *(uint16_t *)(APP_END_ADDR - 8);
-    // Check CRC and validity flag
-    return (crc == stored_crc) && (*(uint32_t *)APP_VALIDITY_FLAG_ADDR == 0xA5A5A5A5);
+    uint16_t crc = CalculateCRC16((uint8_t *)start_addr, APP_END_ADDR - start_addr - 8); /* Calculate CRC */
+    uint16_t stored_crc = *(uint16_t *)(APP_END_ADDR - 8); /* Read stored CRC */
+    return (crc == stored_crc) && (*(uint32_t *)APP_VALIDITY_FLAG_ADDR == 0xA5A5A5A5); /* Check CRC and flag */
 }
 
-
-
-
-/**
-  * @brief  Jumps to the application code after validation, with fallback to backup.
-  * @retval None (jumps to application or halts with LED blinking).
-  * @note   - Validates the main application (`APP_START_ADDR`) and jumps if valid.
-  *         - Falls back to the backup application (`BACKUP_START_ADDR`) if the main application is invalid.
-  *         - Halts with a blinking LED if both applications are invalid, indicating a critical failure.
-  *         - Sets the main stack pointer (MSP) and calls the application’s reset handler.
-  * @context Called during system startup in `main` to boot into the application code after bootloader
-  *          checks. Ensures the BMS runs a valid firmware, critical for CubeSat reliability after updates.
-  * @integration The STM32 uses this function to transition from bootloader to application mode,
-  *              ensuring safe booting by validating firmware integrity (`IsApplicationValid`).
-  *              The LED blinking in failure cases provides visual feedback for debugging.
-  * @debug  - If the system halts with LED blinking, check the main and backup application regions
-  *           (`APP_START_ADDR`, `BACKUP_START_ADDR`) for valid firmware.
-  *         - Verify the validity flag and CRC values stored in flash (`APP_VALIDITY_FLAG_ADDR`, `APP_END_ADDR - 8`)
-  *           to ensure they match the expected values.
-  *         - Ensure the reset handler addresses (`APP_START_ADDR + 4`, `BACKUP_START_ADDR + 4`) point to valid
-  *           functions in the application firmware.
-  *         - Use a debugger to inspect the stack pointer (`MSP`) and program counter after the jump to confirm
-  *           successful transition to the application.
-  */
+/* Define function to jump to application code
+ * Inputs: None
+ * Returns: void, meaning it returns nothing; it jumps to application code or halts.
+ * What it does: Attempts to jump to the main or backup application, halting if both invalid.
+ */
 void JumpToApplication(void)
 {
-    // Validate the main application at APP_START_ADDR
-    if (IsApplicationValid(APP_START_ADDR)) {
-        // Read the reset handler address from the application vector table (offset 4)
-        uint32_t app_jump_address = *(volatile uint32_t *)(APP_START_ADDR + 4);
-        // Cast the address to a function pointer for the reset handler
-        void (*app_reset_handler)(void) = (void (*)(void))app_jump_address;
-        // Set the main stack pointer (MSP) to the value stored at APP_START_ADDR
-        __set_MSP(*(volatile uint32_t *)APP_START_ADDR);
-        // Jump to the application’s reset handler to start execution
-        app_reset_handler();
+    if (IsApplicationValid(APP_START_ADDR)) { /* Check main application validity */
+        uint32_t app_jump_address = *(volatile uint32_t *)(APP_START_ADDR + 4); /* Read reset handler */
+        void (*app_reset_handler)(void) = (void (*)(void))app_jump_address; /* Cast to function pointer */
+        __set_MSP(*(volatile uint32_t *)APP_START_ADDR); /* Set stack pointer */
+        app_reset_handler(); /* Jump to main application */
     } else {
-        // Main application is invalid, attempt to fall back to the backup application
-        Log_Error("Main application invalid, falling back to backup...");
-        if (IsApplicationValid(BACKUP_START_ADDR)) {
-            // Read the reset handler address from the backup vector table
-            uint32_t backup_jump_address = *(volatile uint32_t *)(BACKUP_START_ADDR + 4);
-            // Cast the address to a function pointer for the reset handler
-            void (*backup_reset_handler)(void) = (void (*)(void))backup_jump_address;
-            // Set the main stack pointer (MSP) to the value stored at BACKUP_START_ADDR
-            __set_MSP(*(volatile uint32_t *)BACKUP_START_ADDR);
-            // Jump to the backup application’s reset handler
-            backup_reset_handler();
+        Log_Error("Main application invalid, falling back to backup..."); /* Log failure */
+        if (IsApplicationValid(BACKUP_START_ADDR)) { /* Check backup validity */
+            uint32_t backup_jump_address = *(volatile uint32_t *)(BACKUP_START_ADDR + 4); /* Read reset handler */
+            void (*backup_reset_handler)(void) = (void (*)(void))backup_jump_address; /* Cast to function pointer */
+            __set_MSP(*(volatile uint32_t *)BACKUP_START_ADDR); /* Set stack pointer */
+            backup_reset_handler(); /* Jump to backup application */
         } else {
-            // Both main and backup applications are invalid, enter failure mode
-            Log_Error("Backup application also invalid, halting...");
-            while (1) {
-                // Blink the LED indefinitely to indicate a critical failure
-                HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
-                HAL_Delay(500); // 500 ms blink interval for visibility
+            Log_Error("Backup application also invalid, halting..."); /* Log failure */
+            while (1) { /* Infinite loop */
+                HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin); /* Toggle LED */
+                HAL_Delay(500); /* Wait 500 ms */
             }
         }
     }
 }
 
-/* USER CODE END 0 */
-
-/**
-  * @brief  The application entry point.
-  * @retval int
-  */
+/* Define main function, program entry point
+ * Inputs: None
+ * Returns: int, typically 0 for success, but unused here as it runs indefinitely.
+ * What it does: Initializes hardware, checks firmware mode, and runs the main BMS loop.
+ */
 int main(void)
 {
-
-  /* USER CODE BEGIN 1 */
-  /* USER CODE END 1 */
-
-  /* MCU Configuration--------------------------------------------------------*/
-
-  /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
-  HAL_Init();
-
-  /* USER CODE BEGIN Init */
-  /* USER CODE END Init */
-
-  /* Configure the system clock */
-  SystemClock_Config();
-
-  /* USER CODE BEGIN SysInit */
-  /* USER CODE END SysInit */
-
-  /* Initialize all configured peripherals */
-  MX_GPIO_Init();
-  MX_I2C1_Init();
-  MX_I2C2_Init();
-  MX_I2C3_Init();
-  MX_RTC_Init();
-  MX_USART1_UART_Init();
-  MX_USART2_Init();
-  MX_ADC1_Init();
-  /* USER CODE BEGIN 2 */
-S
-
-    // Set an initial RTC time and date for logging purposes
-    RTC_TimeTypeDef sTime = {0};
-    RTC_DateTypeDef sDate = {0};
-    sTime.Hours = 12;
-    sTime.Minutes = 0;
-    sTime.Seconds = 0;
-    sDate.Year = 25; // 2025
-    sDate.Month = 3; // March
-    sDate.Date = 28; // 28th
-    sDate.WeekDay = RTC_WEEKDAY_FRIDAY;
-    HAL_RTC_SetTime(&hrtc, &sTime, RTC_FORMAT_BIN);
-    HAL_RTC_SetDate(&hrtc, &sDate, RTC_FORMAT_BIN);
-
-    // Initialize the logging system to prepare flash memory for error logging
-    Log_Init();
-
-    // Check if a firmware update is requested and enter bootloader mode if needed
-    Bootloader_Check();
-
-    if (firmware_update_mode)
-    {
-        // Enter firmware update mode and handle the update process
-        Bootloader_FirmwareUpdate();
-        HAL_NVIC_SystemReset(); // Reboot after update (should not reach here)
+    HAL_Init(); /* Initialize STM32 HAL library */
+    SystemClock_Config(); /* Configure system clock */
+    MX_GPIO_Init(); /* Initialize GPIO pins */
+    MX_I2C1_Init(); /* Initialize I2C1 */
+    MX_I2C2_Init(); /* Initialize I2C2 */
+    MX_I2C3_Init(); /* Initialize I2C3 */
+    MX_RTC_Init(); /* Initialize RTC */
+    MX_USART1_UART_Init(); /* Initialize USART1 */
+    MX_USART2_UART_Init(); /* Initialize USART2 */
+    MX_ADC1_Init(); /* Initialize ADC1 */
+    RTC_TimeTypeDef sTime = {0}; /* Create structure for RTC time */
+    RTC_DateTypeDef sDate = {0}; /* Create structure for RTC date */
+    sTime.Hours = 12; /* Set initial hour to 12 */
+    sTime.Minutes = 0; /* Set initial minutes to 0 */
+    sTime.Seconds = 0; /* Set initial seconds to 0 */
+    sDate.Year = 25; /* Set year to 2025 */
+    sDate.Month = 3; /* Set month to March */
+    sDate.Date = 28; /* Set date to 28 */
+    sDate.WeekDay = RTC_WEEKDAY_FRIDAY; /* Set weekday to Friday */
+    HAL_RTC_SetTime(&hrtc, &sTime, RTC_FORMAT_BIN); /* Set RTC time */
+    HAL_RTC_SetDate(&hrtc, &sDate, RTC_FORMAT_BIN); /* Set RTC date */
+    Log_Init(); /* Initialize logging system */
+    Bootloader_Check(); /* Check for firmware update mode */
+    if (firmware_update_mode) { /* Check update mode */
+        Bootloader_FirmwareUpdate(); /* Handle firmware update */
+        HAL_NVIC_SystemReset(); /* Reset microcontroller */
     }
-
-    // Attempt to jump to the application code (main or backup)
-    JumpToApplication();
-
-    // Fallback if the jump fails: Log the failure and proceed with normal operation
-    Log_Error("Failed to jump to application, entering normal operation");
-
-    // Initialize the BQ76920 ICs for battery monitoring
-    if (BQ76920_Init(&hi2c1) != HAL_OK)
-    {
-        Log_Error("BQ76920 (I2C1) initialization failed");
-        Error_Handler();
+    JumpToApplication(); /* Attempt to jump to application */
+    Log_Error("Failed to jump to application, entering normal operation"); /* Log failure */
+    if (BQ76920_Init(&hi2c1) != HAL_OK) { /* Initialize first BQ76920 */
+        Log_Error("BQ76920 (I2C1) initialization failed"); /* Log error */
+        Error_Handler(); /* Call error handler */
     }
-    if (BQ76920_ConfigureProtection(&hi2c1) != HAL_OK)
-    {
-        Log_Error("BQ76920 (I2C1) protection configuration failed");
-        Error_Handler();
+    if (BQ76920_ConfigureProtection(&hi2c1) != HAL_OK) { /* Configure protection for first IC */
+        Log_Error("BQ76920 (I2C1) protection configuration failed"); /* Log error */
+        Error_Handler(); /* Call error handler */
     }
-
-    if (BQ76920_Init(&hi2c2) != HAL_OK)
-    {
-        Log_Error("BQ76920 (I2C2) initialization failed");
-        Error_Handler();
+    if (BQ76920_Init(&hi2c2) != HAL_OK) { /* Initialize second BQ76920 */
+        Log_Error("BQ76920 (I2C2) initialization failed"); /* Log error */
+        Error_Handler(); /* Call error handler */
     }
-    if (BQ76920_ConfigureProtection(&hi2c2) != HAL_OK)
-    {
-        Log_Error("BQ76920 (I2C2) protection configuration failed");
-        Error_Handler();
+    if (BQ76920_ConfigureProtection(&hi2c2) != HAL_OK) { /* Configure protection for second IC */
+        Log_Error("BQ76920 (I2C2) protection configuration failed"); /* Log error */
+        Error_Handler(); /* Call error handler */
     }
-
-    // Initialize Kalman filters for SOC and SOH estimation
-    KalmanFilter_Init(&soc_kf, INITIAL_SOC, 1.0, 0.01, 1.0);
-    KalmanFilter_Init(&soh_kf, INITIAL_SOH, 1.0, 0.01, 1.0);
-    // Initialize PID controller for heater regulation
-    PID_Init();
-
-    // Mark the BMS as online and operational
-    bms_online = 1;
-
-    // Start LED blinking for 5 seconds to indicate successful startup
-    startup_blink_start = HAL_GetTick();
-    last_blink_toggle = HAL_GetTick();
-
-    // Initialize battery parameters for coulomb counting
-    initial_capacity = battery_config.nominal_capacity;
-    actual_capacity = battery_config.nominal_capacity;
-    coulomb_count = (INITIAL_SOC / 100.0) * battery_config.nominal_capacity;
-  /* USER CODE END 2 */
-
-  /* Infinite loop */
-  /* USER CODE BEGIN WHILE */
-    // Timestamps for periodic tasks
-    uint32_t last_log_read = 0;    // Last time logs were sent to OBC
-    uint32_t last_status_send = 0; // Last time telemetry was sent to OBC
-    uint32_t last_time_sync = 0;   // Last time RTC was synchronized with OBC
-
-    // Main loop: Runs every LOOP_TIME for real-time monitoring and control
-    while (1)
-    {
-        // Blink LED for 5 seconds post-startup to indicate system activity
-        if (HAL_GetTick() - startup_blink_start < STARTUP_BLINK_DURATION)
-        {
-            if (HAL_GetTick() - last_blink_toggle >= BLINK_INTERVAL)
-            {
-                HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
-                last_blink_toggle = HAL_GetTick();
+    KalmanFilter_Init(&soc_kf, INITIAL_SOC, 1.0, 0.01, 1.0); /* Initialize SOC Kalman filter */
+    KalmanFilter_Init(&soh_kf, INITIAL_SOH, 1.0, 0.01, 1.0); /* Initialize SOH Kalman filter */
+    PID_Init(); /* Initialize PID controller */
+    bms_online = 1; /* Set BMS online */
+    startup_blink_start = HAL_GetTick(); /* Record blink start time */
+    last_blink_toggle = HAL_GetTick(); /* Record last toggle time */
+    initial_capacity = battery_config.nominal_capacity; /* Set initial capacity */
+    actual_capacity = battery_config.nominal_capacity; /* Set actual capacity */
+    coulomb_count = (INITIAL_SOC / 100.0) * battery_config.nominal_capacity; /* Set initial charge */
+    uint32_t last_log_read = 0; /* Initialize last log read time */
+    uint32_t last_status_send = 0; /* Initialize last status send time */
+    uint32_t last_time_sync = 0; /* Initialize last time sync time */
+    while (1) { /* Start infinite loop */
+        if (HAL_GetTick() - startup_blink_start < STARTUP_BLINK_DURATION) { /* Check if within 5 seconds */
+            if (HAL_GetTick() - last_blink_toggle >= BLINK_INTERVAL) { /* Check toggle interval */
+                HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin); /* Toggle LED */
+                last_blink_toggle = HAL_GetTick(); /* Update toggle time */
             }
         }
-        else
-        {
-            HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_RESET); // Turn off LED after startup
+        else { /* After 5 seconds */
+            HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_RESET); /* Turn off LED */
         }
-
-        // Read cell voltages from the first BQ76920 IC
-        if (BQ76920_ReadVoltages(&hi2c1, group_voltages_1, 0) != HAL_OK)
-        {
-            Log_Error("Error reading BQ76920 (I2C1) group voltages");
-            for (uint8_t i = 0; i < NUM_GROUPS_PER_IC; i++)
-            {
-                group_voltages_1[i] = 0; // Reset voltages on error
+        if (BQ76920_ReadVoltages(&hi2c1, group_voltages_1, 0) != HAL_OK) { /* Read voltages (IC1) */
+            Log_Error("Error reading BQ76920 (I2C1) group voltages"); /* Log error */
+            for (uint8_t i = 0; i < NUM_GROUPS_PER_IC; i++) { /* Loop through cells */
+                group_voltages_1[i] = 0; /* Reset voltages */
             }
         }
-        // Read pack current from the first BQ76920 IC
-        if (BQ76920_ReadCurrent(&hi2c1, &pack_current_1) != HAL_OK)
-        {
-            Log_Error("Error reading BQ76920 (I2C1) current");
+        if (BQ76920_ReadCurrent(&hi2c1, &pack_current_1) != HAL_OK) { /* Read current (IC1) */
+            Log_Error("Error reading BQ76920 (I2C1) current"); /* Log error */
         }
-
-        // Read cell voltages from the second BQ76920 IC
-        if (BQ76920_ReadVoltages(&hi2c2, group_voltages_2, 0) != HAL_OK)
-        {
-            Log_Error("Error reading BQ76920 (I2C2) group voltages");
-            for (uint8_t i = 0; i < NUM_GROUPS_PER_IC; i++)
-            {
-                group_voltages_2[i] = 0; // Reset voltages on error
+        if (BQ76920_ReadVoltages(&hi2c2, group_voltages_2, 0) != HAL_OK) { /* Read voltages (IC2) */
+            Log_Error("Error reading BQ76920 (I2C2) group voltages"); /* Log error */
+            for (uint8_t i = 0; i < NUM_GROUPS_PER_IC; i++) { /* Loop through cells */
+                group_voltages_2[i] = 0; /* Reset voltages */
             }
         }
-        // Read pack current from the second BQ76920 IC
-        if (BQ76920_ReadCurrent(&hi2c2, &pack_current_2) != HAL_OK)
-        {
-            Log_Error("Error reading BQ76920 (I2C2) current");
+        if (BQ76920_ReadCurrent(&hi2c2, &pack_current_2) != HAL_OK) { /* Read current (IC2) */
+            Log_Error("Error reading BQ76920 (I2C2) current"); /* Log error */
         }
-
-        // Read battery temperatures from NTC sensors
-        if (Temperature_Read(&hi2c1, &hi2c2, &temperature_1, &temperature_2) != HAL_OK)
-        {
-            Log_Error("Error reading temperatures (I2C1/I2C2)");
-            temperature_1 = INT16_MIN; // Indicate error with sentinel value
-            temperature_2 = INT16_MIN;
+        if (Temperature_Read(&hi2c1, &hi2c2, &temperature_1, &temperature_2) != HAL_OK) { /* Read temperatures */
+            Log_Error("Error reading temperatures (I2C1/I2C2)"); /* Log error */
+            temperature_1 = INT16_MIN; /* Set error value for temperature 1 */
+            temperature_2 = INT16_MIN; /* Set error value for temperature 2 */
         }
-
-        // Check for redundancy discrepancies between the two BQ76920 ICs
-        uint8_t discrepancy_flag = 0;
-        BQ76920_CheckRedundancy(group_voltages_1, group_voltages_2, pack_current_1, pack_current_2, &discrepancy_flag);
-        if (discrepancy_flag)
-        {
-            error_flags |= ERROR_DISCREPANCY;
-            Log_Error("Redundancy discrepancy detected");
+        uint8_t discrepancy_flag = 0; /* Create flag for redundancy check */
+        BQ76920_CheckRedundancy(group_voltages_1, group_voltages_2, pack_current_1, pack_current_2, &discrepancy_flag); /* Check redundancy */
+        if (discrepancy_flag) { /* Check discrepancy */
+            error_flags |= ERROR_DISCREPANCY; /* Set discrepancy flag */
+            Log_Error("Redundancy discrepancy detected"); /* Log error */
         }
-
-        // Read PCB temperature using the STM32’s internal sensor
-        pcb_temperature = Read_Internal_Temperature();
-
-        // Check BQ76920 status flags for faults (e.g., overvoltage, overcurrent)
-        BQ76920_CheckStatus(&hi2c1, &hi2c2, &error_flags);
-
-        // Check temperature limits for battery and PCB
-        int16_t highest_temp = (temperature_1 > temperature_2) ? temperature_1 : temperature_2;
-        int16_t lowest_temp = (temperature_1 < temperature_2) ? temperature_1 : temperature_2;
-        if (highest_temp > battery_config.overtemp_threshold || pcb_temperature > battery_config.overtemp_threshold)
-        {
-            error_flags |= ERROR_OVERTEMP;
-            Log_Error("Overtemperature detected");
+        pcb_temperature = Read_Internal_Temperature(); /* Read PCB temperature */
+        BQ76920_CheckStatus(&hi2c1, &hi2c2, &error_flags); /* Check BQ76920 status */
+        int16_t highest_temp = (temperature_1 > temperature_2) ? temperature_1 : temperature_2; /* Select higher temperature */
+        int16_t lowest_temp = (temperature_1 < temperature_2) ? temperature_1 : temperature_2; /* Select lower temperature */
+        if (highest_temp > battery_config.overtemp_threshold || pcb_temperature > battery_config.overtemp_threshold) { /* Check overtemperature */
+            error_flags |= ERROR_OVERTEMP; /* Set overtemperature flag */
+            Log_Error("Overtemperature detected"); /* Log error */
         }
-        if (lowest_temp < battery_config.undertemp_threshold)
-        {
-            error_flags |= ERROR_UNDERTEMP;
-            Log_Error("Undertemperature detected");
+        if (lowest_temp < battery_config.undertemp_threshold) { /* Check undertemperature */
+            error_flags |= ERROR_UNDERTEMP; /* Set undertemperature flag */
+            Log_Error("Undertemperature detected"); /* Log error */
         }
-
-        // Update operational timers based on current flow
-        total_operating_time = HAL_GetTick() / 1000; // Total runtime in seconds
-        int16_t total_current = (pack_current_1 + pack_current_2) / 2;
-        if (total_current < 0) { // Charging (negative current)
-            total_charge_time += (uint32_t)LOOP_TIME; // Increment charge time
-            if (soc < 20.0 && !charging_started) {
-                charging_started = 1; // Mark start of a charging cycle
+        total_operating_time = HAL_GetTick() / 1000; /* Update operating time */
+        int16_t total_current = (pack_current_1 + pack_current_2) / 2; /* Calculate average current */
+        if (total_current < 0) { /* Check if charging */
+            total_charge_time += (uint32_t)LOOP_TIME; /* Increment charge time */
+            if (soc < 20.0 && !charging_started) { /* Check charge cycle start */
+                charging_started = 1; /* Set charging started */
             }
-            if (soc >= 100.0 && charging_started) {
-                charge_cycle_count++; // Increment cycle count on full charge
-                charging_started = 0; // Reset charging cycle flag
+            if (soc >= 100.0 && charging_started) { /* Check charge cycle complete */
+                charge_cycle_count++; /* Increment cycle count */
+                charging_started = 0; /* Reset charging started */
             }
-        } else if (total_current > 0) { // Discharging (positive current)
-            total_discharge_time += (uint32_t)LOOP_TIME; // Increment discharge time
+        } else if (total_current > 0) { /* Check if discharging */
+            total_discharge_time += (uint32_t)LOOP_TIME; /* Increment discharge time */
         }
-
-        // Perform cell balancing on both BQ76920 ICs
-        if (BQ76920_BalanceCells(&hi2c1, group_voltages_1, 0, &balancing_mask_1) != HAL_OK)
-        {
-            Log_Error("Error balancing groups (I2C1)");
+        if (BQ76920_BalanceCells(&hi2c1, group_voltages_1, 0, &balancing_mask_1) != HAL_OK) { /* Balance cells (IC1) */
+            Log_Error("Error balancing groups (I2C1)"); /* Log error */
         }
-        if (BQ76920_BalanceCells(&hi2c2, group_voltages_2, 0, &balancing_mask_2) != HAL_OK)
-        {
-            Log_Error("Error balancing groups (I2C2)");
+        if (BQ76920_BalanceCells(&hi2c2, group_voltages_2, 0, &balancing_mask_2) != HAL_OK) { /* Balance cells (IC2) */
+            Log_Error("Error balancing groups (I2C2)"); /* Log error */
         }
-        // Update balancing active flag based on masks
-        balancing_active = (balancing_mask_1 || balancing_mask_2) ? 1 : 0;
-
-        // Control heaters using PID based on the lowest battery temperature
-        PID_Control(lowest_temp);
-
-        // Update SOC and SOH estimates
-        Update_SOC_SOH();
-
-        // Update BMS operating mode and charge/discharge status
-        Update_BMS_Mode();
-
-        // Apply CC-CV charging algorithm if in charging mode
-        ChargeBattery();
-
-        // Log the current system state for diagnostics
-        char message[MESSAGE_SIZE];
-        snprintf(message, sizeof(message), "Time: %lu | ", HAL_GetTick());
-        for (uint8_t i = 0; i < NUM_GROUPS_PER_IC; i++)
-        {
-            char group_data[20];
-            snprintf(group_data, sizeof(group_data), "Cell%d: %dmV ", i + 1, group_voltages_1[i]);
-            strncat(message, group_data, MESSAGE_SIZE - strlen(message) - 1);
+        balancing_active = (balancing_mask_1 || balancing_mask_2) ? 1 : 0; /* Update balancing flag */
+        PID_Control(lowest_temp); /* Control heaters */
+        Update_SOC_SOH(); /* Update SOC and SOH */
+        Update_BMS_Mode(); /* Update BMS mode */
+        ChargeBattery(); /* Manage charging */
+        char message[MESSAGE_SIZE]; /* Create buffer for status message */
+        snprintf(message, sizeof(message), "Time: %lu | ", HAL_GetTick()); /* Start message with timestamp */
+        for (uint8_t i = 0; i < NUM_GROUPS_PER_IC; i++) { /* Loop through cells */
+            char group_data[20]; /* Create buffer for cell data */
+            snprintf(group_data, sizeof(group_data), "Cell%d: %dmV ", i + 1, group_voltages_1[i]); /* Format cell voltage */
+            strncat(message, group_data, MESSAGE_SIZE - strlen(message) - 1); /* Append to message */
         }
-        char temp_data[88];
-        snprintf(temp_data, sizeof(temp_data), "I1: %dmA I2: %dmA T1: %dC T2: %dC PCB: %dC SOC: %.1f%% SOH: %.1f%%",
-                 pack_current_1, pack_current_2, temperature_1, temperature_2, pcb_temperature, soc, soh);
-        strncat(message, temp_data, MESSAGE_SIZE - strlen(message) - 1);
-        Log_Error(message);
-
-        // Send logs to the OBC every 10 seconds
-        if (HAL_GetTick() - last_log_read >= 10000)
-        {
-            Log_Read_All();
-            last_log_read = HAL_GetTick();
+        char temp_data[88]; /* Create buffer for additional data */
+        snprintf(temp_data, sizeof(temp_data), "I1: %dmA I2: %dmA T1: %dC T2: %dC PCB: %dC SOC: %.1f%% SOH: %.1f%%", pack_current_1, pack_current_2, temperature_1, temperature_2, pcb_temperature, soc, soh); /* Format data */
+        strncat(message, temp_data, MESSAGE_SIZE - strlen(message) - 1); /* Append to message */
+        Log_Error(message); /* Log status */
+        if (HAL_GetTick() - last_log_read >= 10000) { /* Check if 10 seconds elapsed */
+            Log_Read_All(); /* Send logs */
+            last_log_read = HAL_GetTick(); /* Update log read time */
         }
-
-        // Send telemetry to the OBC every 5 seconds
-        if (HAL_GetTick() - last_status_send >= 5000)
-        {
-            SSP_SendStatus();
-            last_status_send = HAL_GetTick();
+        if (HAL_GetTick() - last_status_send >= 5000) { /* Check if 5 seconds elapsed */
+            SSP_SendStatus(); /* Send telemetry */
+            last_status_send = HAL_GetTick(); /* Update status send time */
         }
-
-        // Synchronize RTC with the OBC every 60 seconds
-        if (HAL_GetTick() - last_time_sync >= 60000)
-        {
-            SSP_TimeTypeDef time = {0};
-            if (SSP_RequestTime(&husart2, &time) == HAL_OK)
-            {
-                // Update RTC with received time
-                RTC_TimeTypeDef sTime = {0};
-                RTC_DateTypeDef sDate = {0};
-                sTime.Hours = time.hour;
-                sTime.Minutes = time.minute;
-                sTime.Seconds = time.second;
-                sDate.Year = (uint8_t)(time.year - 2000);
-                sDate.Month = time.month;
-                sDate.Date = time.day;
-                HAL_RTC_SetTime(&hrtc, &sTime, RTC_FORMAT_BIN);
-                HAL_RTC_SetDate(&hrtc, &sDate, RTC_FORMAT_BIN);
-                Log_Error("Time synchronized with OBC");
+        if (HAL_GetTick() - last_time_sync >= 60000) { /* Check if 60 seconds elapsed */
+            SSP_TimeTypeDef time = {0}; /* Create structure for time */
+            if (SSP_RequestTime(&huart2, &time) == HAL_OK) { /* Request time from OBC */
+                RTC_TimeTypeDef sTime = {0}; /* Create structure for RTC time */
+                RTC_DateTypeDef sDate = {0}; /* Create structure for RTC date */
+                sTime.Hours = time.hour; /* Set hour */
+                sTime.Minutes = time.minute; /* Set minutes */
+                sTime.Seconds = time.second; /* Set seconds */
+                sDate.Year = (uint8_t)(time.year - 2000); /* Set year */
+                sDate.Month = time.month; /* Set month */
+                sDate.Date = time.day; /* Set day */
+                HAL_RTC_SetTime(&hrtc, &sTime, RTC_FORMAT_BIN); /* Update RTC time */
+                HAL_RTC_SetDate(&hrtc, &sDate, RTC_FORMAT_BIN); /* Update RTC date */
+                Log_Error("Time synchronized with OBC"); /* Log success */
             }
-            else
-            {
-                Log_Error("Failed to synchronize time with OBC");
+            else { /* Time sync failed */
+                Log_Error("Failed to synchronize time with OBC"); /* Log failure */
             }
-            last_time_sync = HAL_GetTick();
+            last_time_sync = HAL_GetTick(); /* Update sync time */
         }
-
-        // Process any received SSP frames from the OBC
-        SSP_FrameTypeDef received_frame = {0};
-        if (SSP_ReceiveFrame(&husart2, ssp_rx_buffer, SSP_MAX_FRAME_LEN, &received_frame) == HAL_OK)
-        {
-            SSP_ProcessReceivedFrame(&received_frame);
+        SSP_FrameTypeDef received_frame = {0}; /* Create structure for received frame */
+        if (SSP_ReceiveFrame(&huart2, ssp_rx_buffer, SSP_MAX_FRAME_LEN, &received_frame) == HAL_OK) { /* Check for frame */
+            SSP_ProcessReceivedFrame(&received_frame); /* Process frame */
         }
-
-        // Delay to maintain loop timing (LOOP_TIME in seconds)
-        HAL_Delay((uint32_t)(LOOP_TIME * 1000));
+        HAL_Delay((uint32_t)(LOOP_TIME * 1000)); /* Delay for loop timing */
     }
-    /* USER CODE END WHILE */
-
-    /* USER CODE BEGIN 3 */
-  /* USER CODE END 3 */
 }
 
-/**
-  * @brief System Clock Configuration
-  * @retval None
-  */
+/* Define function to configure system clock
+ * Inputs: None
+ * Returns: void, meaning it returns nothing; it configures the clock and calls Error_Handler on failure.
+ * What it does: Sets up the STM32’s clock using HSE and LSE oscillators for system and RTC timing.
+ */
 void SystemClock_Config(void)
 {
-  RCC_OscInitTypeDef RCC_OscInitStruct = {0};
-  RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
-
-  /** Configure the main internal regulator output voltage
-  */
-  if (HAL_PWREx_ControlVoltageScaling(PWR_REGULATOR_VOLTAGE_SCALE1) != HAL_OK)
-  {
-    Error_Handler();
-  }
-
-  /** Configure LSE Drive Capability
-  */
-  HAL_PWR_EnableBkUpAccess();
-  __HAL_RCC_LSEDRIVE_CONFIG(RCC_LSEDRIVE_LOW);
-
-  /** Initializes the RCC Oscillators according to the specified parameters
-  * in the RCC_OscInitTypeDef structure.
-  */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE|RCC_OSCILLATORTYPE_LSE;
-  RCC_OscInitStruct.HSEState = RCC_HSE_ON;
-  RCC_OscInitStruct.LSEState = RCC_LSE_ON;
-  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_NONE;
-  if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
-  {
-    Error_Handler();
-  }
-
-  /** Initializes the CPU, AHB and APB buses clocks
-  */
-  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
-                              |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
-  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_HSE;
-  RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
-  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
-  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
-
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_0) != HAL_OK)
-  {
-    Error_Handler();
-  }
-
-  /** Enables the Clock Security System
-  */
-  HAL_RCC_EnableCSS();
-
-  /** Enables the Clock Security System
-  */
-  HAL_RCCEx_EnableLSECSS();
+    RCC_OscInitTypeDef RCC_OscInitStruct = {0}; /* Create structure for oscillator settings */
+    RCC_ClkInitTypeDef RCC_ClkInitStruct = {0}; /* Create structure for clock settings */
+    if (HAL_PWREx_ControlVoltageScaling(PWR_REGULATOR_VOLTAGE_SCALE1) != HAL_OK) /* Set voltage scaling */
+        Error_Handler(); /* Call error handler if scaling fails */
+    HAL_PWR_EnableBkUpAccess(); /* Enable backup domain access */
+    __HAL_RCC_LSEDRIVE_CONFIG(RCC_LSEDRIVE_LOW); /* Set low drive for LSE oscillator */
+    RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE|RCC_OSCILLATORTYPE_LSE; /* Select HSE and LSE oscillators */
+    RCC_OscInitStruct.HSEState = RCC_HSE_ON; /* Enable HSE oscillator */
+    RCC_OscInitStruct.LSEState = RCC_LSE_ON; /* Enable LSE oscillator */
+    RCC_OscInitStruct.PLL.PLLState = RCC_PLL_NONE; /* Disable PLL */
+    if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK) /* Apply oscillator settings */
+        Error_Handler(); /* Call error handler if configuration fails */
+    RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK|RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2; /* Select clock types */
+    RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_HSE; /* Set HSE as system clock */
+    RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1; /* Set AHB divider to 1 */
+    RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1; /* Set APB1 divider to 1 */
+    RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1; /* Set APB2 divider to 1 */
+    if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_0) != HAL_OK) /* Apply clock settings */
+        Error_Handler(); /* Call error handler if configuration fails */
+    HAL_RCC_EnableCSS(); /* Enable Clock Security System */
+    HAL_RCCEx_EnableLSECSS(); /* Enable LSE Clock Security System */
 }
 
-/**
-  * @brief ADC1 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_ADC1_Init(void)
-{
-
-  /* USER CODE BEGIN ADC1_Init 0 */
-
-  /* USER CODE END ADC1_Init 0 */
-
-  ADC_MultiModeTypeDef multimode = {0};
-  ADC_ChannelConfTypeDef sConfig = {0};
-
-  /* USER CODE BEGIN ADC1_Init 1 */
-
-  /* USER CODE END ADC1_Init 1 */
-
-  /** Common config
-  */
-  hadc1.Instance = ADC1;
-  hadc1.Init.ClockPrescaler = ADC_CLOCK_ASYNC_DIV4;
-  hadc1.Init.Resolution = ADC_RESOLUTION_12B;
-  hadc1.Init.DataAlign = ADC_DATAALIGN_RIGHT;
-  hadc1.Init.ScanConvMode = ADC_SCAN_DISABLE;
-  hadc1.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
-  hadc1.Init.LowPowerAutoWait = DISABLE;
-  hadc1.Init.ContinuousConvMode = DISABLE;
-  hadc1.Init.NbrOfConversion = 1;
-  hadc1.Init.DiscontinuousConvMode = DISABLE;
-  hadc1.Init.ExternalTrigConv = ADC_SOFTWARE_START;
-  hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
-  hadc1.Init.DMAContinuousRequests = DISABLE;
-  hadc1.Init.Overrun = ADC_OVR_DATA_PRESERVED;
-  hadc1.Init.OversamplingMode = DISABLE;
-  if (HAL_ADC_Init(&hadc1) != HAL_OK)
-  {
-    Error_Handler();
-  }
-
-  /** Configure the ADC multi-mode
-  */
-  multimode.Mode = ADC_MODE_INDEPENDENT;
-  if (HAL_ADCEx_MultiModeConfigChannel(&hadc1, &multimode) != HAL_OK)
-  {
-    Error_Handler();
-  }
-
-  /** Configure Regular Channel
-  */
-  sConfig.Channel = ADC_CHANNEL_16;
-  sConfig.Rank = ADC_REGULAR_RANK_1;
-  sConfig.SamplingTime = ADC_SAMPLETIME_2CYCLES_5;
-  sConfig.SingleDiff = ADC_SINGLE_ENDED;
-  sConfig.OffsetNumber = ADC_OFFSET_NONE;
-  sConfig.Offset = 0;
-  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN ADC1_Init 2 */
-
-  /* USER CODE END ADC1_Init 2 */
-
-}
-
-/**
-  * @brief I2C1 Initialization Function
-  * @param None
-  * @retval None
-  */
+/* Define function to initialize I2C1 for first BQ76920
+ * Inputs: None
+ * Returns: void, meaning it returns nothing; it initializes I2C1 and calls Error_Handler on failure.
+ * What it does: Configures I2C1 for communication with the first BQ76920 IC.
+ */
 static void MX_I2C1_Init(void)
 {
-
-  /* USER CODE BEGIN I2C1_Init 0 */
-
-  /* USER CODE END I2C1_Init 0 */
-
-  /* USER CODE BEGIN I2C1_Init 1 */
-
-  /* USER CODE END I2C1_Init 1 */
-  hi2c1.Instance = I2C1;
-  hi2c1.Init.Timing = 0x00201D2B;
-  hi2c1.Init.OwnAddress1 = 0;
-  hi2c1.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
-  hi2c1.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
-  hi2c1.Init.OwnAddress2 = 0;
-  hi2c1.Init.OwnAddress2Masks = I2C_OA2_NOMASK;
-  hi2c1.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
-  hi2c1.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
-  if (HAL_I2C_Init(&hi2c1) != HAL_OK)
-  {
-    Error_Handler();
-  }
-
-  /** Configure Analogue filter
-  */
-  if (HAL_I2CEx_ConfigAnalogFilter(&hi2c1, I2C_ANALOGFILTER_ENABLE) != HAL_OK)
-  {
-    Error_Handler();
-  }
-
-  /** Configure Digital filter
-  */
-  if (HAL_I2CEx_ConfigDigitalFilter(&hi2c1, 0) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN I2C1_Init 2 */
-
-  /* USER CODE END I2C1_Init 2 */
-
+    hi2c1.Instance = I2C1; /* Select I2C1 peripheral */
+    hi2c1.Init.Timing = 0x00201D2B; /* Set timing for ~100 kHz */
+    hi2c1.Init.OwnAddress1 = 0; /* Set no own address (master mode) */
+    hi2c1.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT; /* Use 7-bit addressing */
+    hi2c1.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE; /* Disable dual addressing */
+    hi2c1.Init.OwnAddress2 = 0; /* Set no second address */
+    hi2c1.Init.OwnAddress2Masks = I2C_OA2_NOMASK; /* Disable address masking */
+    hi2c1.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE; /* Disable general call */
+    hi2c1.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE; /* Enable clock stretching */
+    if (HAL_I2C_Init(&hi2c1) != HAL_OK) /* Initialize I2C1 */
+        Error_Handler(); /* Call error handler if initialization fails */
+    if (HAL_I2CEx_ConfigAnalogFilter(&hi2c1, I2C_ANALOGFILTER_ENABLE) != HAL_OK) /* Enable analog filter */
+        Error_Handler(); /* Call error handler if filter fails */
+    if (HAL_I2CEx_ConfigDigitalFilter(&hi2c1, 0) != HAL_OK) /* Disable digital filter */
+        Error_Handler(); /* Call error handler if filter fails */
 }
 
-/**
-  * @brief I2C2 Initialization Function
-  * @param None
-  * @retval None
-  */
+/* Define function to initialize I2C2 for second BQ76920
+ * Inputs: None
+ * Returns: void, meaning it returns nothing; it initializes I2C2 and calls Error_Handler on failure.
+ * What it does: Configures I2C2 for communication with the second BQ76920 IC.
+ */
 static void MX_I2C2_Init(void)
 {
-
-  /* USER CODE BEGIN I2C2_Init 0 */
-
-  /* USER CODE END I2C2_Init 0 */
-
-  /* USER CODE BEGIN I2C2_Init 1 */
-
-  /* USER CODE END I2C2_Init 1 */
-  hi2c2.Instance = I2C2;
-  hi2c2.Init.Timing = 0x00201D2B;
-  hi2c2.Init.OwnAddress1 = 0;
-  hi2c2.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
-  hi2c2.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
-  hi2c2.Init.OwnAddress2 = 0;
-  hi2c2.Init.OwnAddress2Masks = I2C_OA2_NOMASK;
-  hi2c2.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
-  hi2c2.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
-  if (HAL_I2C_Init(&hi2c2) != HAL_OK)
-  {
-    Error_Handler();
-  }
-
-  /** Configure Analogue filter
-  */
-  if (HAL_I2CEx_ConfigAnalogFilter(&hi2c2, I2C_ANALOGFILTER_ENABLE) != HAL_OK)
-  {
-    Error_Handler();
-  }
-
-  /** Configure Digital filter
-  */
-  if (HAL_I2CEx_ConfigDigitalFilter(&hi2c2, 0) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN I2C2_Init 2 */
-
-  /* USER CODE END I2C2_Init 2 */
-
+    hi2c2.Instance = I2C2; /* Select I2C2 peripheral */
+    hi2c2.Init.Timing = 0x00201D2B; /* Set timing for ~100 kHz */
+    hi2c2.Init.OwnAddress1 = 0; /* Set no own address (master mode) */
+    hi2c2.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT; /* Use 7-bit addressing */
+    hi2c2.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE; /* Disable dual addressing */
+    hi2c2.Init.OwnAddress2 = 0; /* Set no second address */
+    hi2c2.Init.OwnAddress2Masks = I2C_OA2_NOMASK; /* Disable address masking */
+    hi2c2.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE; /* Disable general call */
+    hi2c2.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE; /* Enable clock stretching */
+    if (HAL_I2C_Init(&hi2c2) != HAL_OK) /* Initialize I2C2 */
+        Error_Handler(); /* Call error handler if initialization fails */
+    if (HAL_I2CEx_ConfigAnalogFilter(&hi2c2, I2C_ANALOGFILTER_ENABLE) != HAL_OK) /* Enable analog filter */
+        Error_Handler(); /* Call error handler if filter fails */
+    if (HAL_I2CEx_ConfigDigitalFilter(&hi2c2, 0) != HAL_OK) /* Disable digital filter */
+        Error_Handler(); /* Call error handler if filter fails */
 }
 
-/**
-  * @brief I2C3 Initialization Function
-  * @param None
-  * @retval None
-  */
+/* Define function to initialize I2C3 (unused)
+ * Inputs: None
+ * Returns: void, meaning it returns nothing; it initializes I2C3 and calls Error_Handler on failure.
+ * What it does: Configures I2C3, though it is not used in this BMS implementation.
+ */
 static void MX_I2C3_Init(void)
 {
-
-  /* USER CODE BEGIN I2C3_Init 0 */
-
-  /* USER CODE END I2C3_Init 0 */
-
-  /* USER CODE BEGIN I2C3_Init 1 */
-
-  /* USER CODE END I2C3_Init 1 */
-  hi2c3.Instance = I2C3;
-  hi2c3.Init.Timing = 0x00201D2B;
-  hi2c3.Init.OwnAddress1 = 0;
-  hi2c3.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
-  hi2c3.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
-  hi2c3.Init.OwnAddress2 = 0;
-  hi2c3.Init.OwnAddress2Masks = I2C_OA2_NOMASK;
-  hi2c3.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
-  hi2c3.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
-  if (HAL_I2C_Init(&hi2c3) != HAL_OK)
-  {
-    Error_Handler();
-  }
-
-  /** Configure Analogue filter
-  */
-  if (HAL_I2CEx_ConfigAnalogFilter(&hi2c3, I2C_ANALOGFILTER_ENABLE) != HAL_OK)
-  {
-    Error_Handler();
-  }
-
-  /** Configure Digital filter
-  */
-  if (HAL_I2CEx_ConfigDigitalFilter(&hi2c3, 0) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN I2C3_Init 2 */
-
-  /* USER CODE END I2C3_Init 2 */
-
+    hi2c3.Instance = I2C3; /* Select I2C3 peripheral */
+    hi2c3.Init.Timing = 0x00201D2B; /* Set timing for ~100 kHz */
+    hi2c3.Init.OwnAddress1 = 0; /* Set no own address (master mode) */
+    hi2c3.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT; /* Use 7-bit addressing */
+    hi2c3.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE; /* Disable dual addressing */
+    hi2c3.Init.OwnAddress2 = 0; /* Set no second address */
+    hi2c3.Init.OwnAddress2Masks = I2C_OA2_NOMASK; /* Disable address masking */
+    hi2c3.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE; /* Disable general call */
+    hi2c3.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE; /* Enable clock stretching */
+    if (HAL_I2C_Init(&hi2c3) != HAL_OK) /* Initialize I2C3 */
+        Error_Handler(); /* Call error handler if initialization fails */
+    if (HAL_I2CEx_ConfigAnalogFilter(&hi2c3, I2C_ANALOGFILTER_ENABLE) != HAL_OK) /* Enable analog filter */
+        Error_Handler(); /* Call error handler if filter fails */
+    if (HAL_I2CEx_ConfigDigitalFilter(&hi2c3, 0) != HAL_OK) /* Disable digital filter */
+        Error_Handler(); /* Call error handler if filter fails */
 }
 
-/**
-  * @brief RTC Initialization Function
-  * @param None
-  * @retval None
-  */
+/* Define function to initialize the Real-Time Clock
+ * Inputs: None
+ * Returns: void, meaning it returns nothing; it initializes RTC and calls Error_Handler on failure.
+ * What it does: Configures the RTC for timekeeping and timestamping logs.
+ */
 static void MX_RTC_Init(void)
 {
-
-  /* USER CODE BEGIN RTC_Init 0 */
-
-  /* USER CODE END RTC_Init 0 */
-
-  RTC_TimeTypeDef sTime = {0};
-  RTC_DateTypeDef sDate = {0};
-
-  /* USER CODE BEGIN RTC_Init 1 */
-
-  /* USER CODE END RTC_Init 1 */
-
-  /** Initialize RTC Only
-  */
-  hrtc.Instance = RTC;
-  hrtc.Init.HourFormat = RTC_HOURFORMAT_24;
-  hrtc.Init.AsynchPrediv = 127;
-  hrtc.Init.SynchPrediv = 255;
-  hrtc.Init.OutPut = RTC_OUTPUT_DISABLE;
-  hrtc.Init.OutPutRemap = RTC_OUTPUT_REMAP_NONE;
-  hrtc.Init.OutPutPolarity = RTC_OUTPUT_POLARITY_HIGH;
-  hrtc.Init.OutPutType = RTC_OUTPUT_TYPE_OPENDRAIN;
-  if (HAL_RTC_Init(&hrtc) != HAL_OK)
-  {
-    Error_Handler();
-  }
-
-  /* USER CODE BEGIN Check_RTC_BKUP */
-
-  /* USER CODE END Check_RTC_BKUP */
-
-  /** Initialize RTC and set the Time and Date
-  */
-  sTime.Hours = 0x0;
-  sTime.Minutes = 0x0;
-  sTime.Seconds = 0x0;
-  sTime.DayLightSaving = RTC_DAYLIGHTSAVING_NONE;
-  sTime.StoreOperation = RTC_STOREOPERATION_RESET;
-  if (HAL_RTC_SetTime(&hrtc, &sTime, RTC_FORMAT_BCD) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sDate.WeekDay = RTC_WEEKDAY_MONDAY;
-  sDate.Month = RTC_MONTH_JANUARY;
-  sDate.Date = 0x1;
-  sDate.Year = 0x0;
-
-  if (HAL_RTC_SetDate(&hrtc, &sDate, RTC_FORMAT_BCD) != HAL_OK)
-  {
-    Error_Handler();
-  }
-
-  /** Enable the TimeStamp
-  */
-  if (HAL_RTCEx_SetTimeStamp(&hrtc, RTC_TIMESTAMPEDGE_RISING, RTC_TIMESTAMPPIN_DEFAULT) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN RTC_Init 2 */
-
-  /* USER CODE END RTC_Init 2 */
-
+    RTC_TimeTypeDef sTime = {0}; /* Create structure for time settings */
+    RTC_DateTypeDef sDate = {0}; /* Create structure for date settings */
+    hrtc.Instance = RTC; /* Select RTC peripheral */
+    hrtc.Init.HourFormat = RTC_HOURFORMAT_24; /* Set 24-hour format */
+    hrtc.Init.AsynchPrediv = 127; /* Set asynchronous prescaler */
+    hrtc.Init.SynchPrediv = 255; /* Set synchronous prescaler */
+    hrtc.Init.OutPut = RTC_OUTPUT_DISABLE; /* Disable RTC output pin */
+    hrtc.Init.OutPutRemap = RTC_OUTPUT_REMAP_NONE; /* No output remapping */
+    hrtc.Init.OutPutPolarity = RTC_OUTPUT_POLARITY_HIGH; /* Set output polarity */
+    hrtc.Init.OutPutType = RTC_OUTPUT_TYPE_OPENDRAIN; /* Set output type */
+    if (HAL_RTC_Init(&hrtc) != HAL_OK) /* Initialize RTC */
+        Error_Handler(); /* Call error handler if initialization fails */
+    sTime.Hours = 0x0; /* Set initial hours to 0 */
+    sTime.Minutes = 0x0; /* Set initial minutes to 0 */
+    sTime.Seconds = 0x0; /* Set initial seconds to 0 */
+    sTime.DayLightSaving = RTC_DAYLIGHTSAVING_NONE; /* Disable daylight saving */
+    sTime.StoreOperation = RTC_STOREOPERATION_RESET; /* Reset stored operation */
+    if (HAL_RTC_SetTime(&hrtc, &sTime, RTC_FORMAT_BCD) != HAL_OK) /* Set RTC time */
+        Error_Handler(); /* Call error handler if setting fails */
+    sDate.WeekDay = RTC_WEEKDAY_MONDAY; /* Set weekday to Monday */
+    sDate.Month = RTC_MONTH_JANUARY; /* Set month to January */
+    sDate.Date = 0x1; /* Set date to 1 */
+    sDate.Year = 0x0; /* Set year to 2000 */
+    if (HAL_RTC_SetDate(&hrtc, &sDate, RTC_FORMAT_BCD) != HAL_OK) /* Set RTC date */
+        Error_Handler(); /* Call error handler if setting fails */
+    if (HAL_RTCEx_SetTimeStamp(&hrtc, RTC_TIMESTAMPEDGE_RISING, RTC_TIMESTAMPPIN_DEFAULT) != HAL_OK) /* Enable timestamp */
+        Error_Handler(); /* Call error handler if timestamp fails */
 }
 
-/**
-  * @brief USART1 Initialization Function
-  * @param None
-  * @retval None
-  */
+/* Define function to initialize USART1 for logging
+ * Inputs: None
+ * Returns: void, meaning it returns nothing; it initializes USART1 and calls Error_Handler on failure.
+ * What it does: Configures USART1 for sending logs over RS485.
+ */
 static void MX_USART1_UART_Init(void)
 {
-
-  /* USER CODE BEGIN USART1_Init 0 */
-
-  /* USER CODE END USART1_Init 0 */
-
-  /* USER CODE BEGIN USART1_Init 1 */
-
-  /* USER CODE END USART1_Init 1 */
-  huart1.Instance = USART1;
-  huart1.Init.BaudRate = 115200;
-  huart1.Init.WordLength = UART_WORDLENGTH_8B;
-  huart1.Init.StopBits = UART_STOPBITS_1;
-  huart1.Init.Parity = UART_PARITY_NONE;
-  huart1.Init.Mode = UART_MODE_TX_RX;
-  huart1.Init.HwFlowCtl = UART_HWCONTROL_NONE;
-  huart1.Init.OverSampling = UART_OVERSAMPLING_16;
-  huart1.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
-  huart1.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
-  if (HAL_UART_Init(&huart1) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN USART1_Init 2 */
-
-  /* USER CODE END USART1_Init 2 */
-
+    huart1.Instance = USART1; /* Select USART1 peripheral */
+    huart1.Init.BaudRate = 115200; /* Set baud rate to 115200 */
+    huart1.Init.WordLength = UART_WORDLENGTH_8B; /* Set 8-bit word length */
+    huart1.Init.StopBits = UART_STOPBITS_1; /* Set 1 stop bit */
+    huart1.Init.Parity = UART_PARITY_NONE; /* Disable parity */
+    huart1.Init.Mode = UART_MODE_TX_RX; /* Enable TX and RX */
+    huart1.Init.HwFlowCtl = UART_HWCONTROL_NONE; /* Disable hardware flow control */
+    huart1.Init.OverSampling = UART_OVERSAMPLING_16; /* Set 16x oversampling */
+    huart1.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE; /* Disable one-bit sampling */
+    huart1.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT; /* Disable advanced features */
+    if (HAL_UART_Init(&huart1) != HAL_OK) /* Initialize USART1 */
+        Error_Handler(); /* Call error handler if initialization fails */
 }
 
-/**
-  * @brief USART2 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_USART2_Init(void)
+/* Define function to initialize USART2 for SSP communication
+ * Inputs: None
+ * Returns: void, meaning it returns nothing; it initializes USART2 and calls Error_Handler on failure.
+ * What it does: Configures USART2 for SSP communication over RS485, though incorrectly in half-duplex.
+ */
+static void MX_USART2_UART_Init(void)
 {
-
-  /* USER CODE BEGIN USART2_Init 0 */
-
-  /* USER CODE END USART2_Init 0 */
-
-  /* USER CODE BEGIN USART2_Init 1 */
-
-  /* USER CODE END USART2_Init 1 */
-  husart2.Instance = USART2;
-  husart2.Init.BaudRate = 115200;
-  husart2.Init.WordLength = USART_WORDLENGTH_8B;
-  husart2.Init.StopBits = USART_STOPBITS_1;
-  husart2.Init.Parity = USART_PARITY_NONE;
-  husart2.Init.Mode = USART_MODE_TX_RX;
-  husart2.Init.CLKPolarity = USART_POLARITY_LOW;
-  husart2.Init.CLKPhase = USART_PHASE_1EDGE;
-  husart2.Init.CLKLastBit = USART_LASTBIT_DISABLE;
-  if (HAL_USART_Init(&husart2) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN USART2_Init 2 */
-
-  /* USER CODE END USART2_Init 2 */
-
+    huart2.Instance = USART2; /* Select USART2 peripheral */
+    huart2.Init.BaudRate = 115200; /* Set baud rate to 115200 */
+    huart2.Init.WordLength = UART_WORDLENGTH_8B; /* Set 8-bit word length */
+    huart2.Init.StopBits = UART_STOPBITS_1; /* Set 1 stop bit */
+    huart2.Init.Parity = UART_PARITY_NONE; /* Disable parity */
+    huart2.Init.Mode = UART_MODE_TX_RX; /* Enable TX and RX */
+    huart2.Init.HwFlowCtl = UART_HWCONTROL_NONE; /* Disable hardware flow control */
+    huart2.Init.OverSampling = UART_OVERSAMPLING_16; /* Set 16x oversampling */
+    huart2.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE; /* Disable one-bit sampling */
+    huart2.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT; /* Disable advanced features */
+    if (HAL_HalfDuplex_Init(&huart2) != HAL_OK) /* Initialize USART2 in half-duplex */
+        Error_Handler(); /* Call error handler if initialization fails */
 }
 
-/**
-  * @brief GPIO Initialization Function
-  * @param None
-  * @retval None
-  */
+/* Define function to initialize GPIO pins
+ * Inputs: None
+ * Returns: void, meaning it returns nothing; it configures GPIO pins.
+ * What it does: Sets up GPIO pins for LED, RS485 DE, heaters, and inputs.
+ */
 static void MX_GPIO_Init(void)
 {
-  GPIO_InitTypeDef GPIO_InitStruct = {0};
-  /* USER CODE BEGIN MX_GPIO_Init_1 */
-
-  /* USER CODE END MX_GPIO_Init_1 */
-
-  /* GPIO Ports Clock Enable */
-  __HAL_RCC_GPIOC_CLK_ENABLE();
-  __HAL_RCC_GPIOH_CLK_ENABLE();
-  __HAL_RCC_GPIOA_CLK_ENABLE();
-  __HAL_RCC_GPIOB_CLK_ENABLE();
-
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_RESET);
-
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(RS4852_DE_GPIO_Port, RS4852_DE_Pin, GPIO_PIN_RESET);
-
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, HEATER2_Pin|HEATER1_Pin, GPIO_PIN_RESET);
-
-  /*Configure GPIO pin : LED_Pin */
-  GPIO_InitStruct.Pin = LED_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(LED_GPIO_Port, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : RS4852_DE_Pin */
-  GPIO_InitStruct.Pin = RS4852_DE_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(RS4852_DE_GPIO_Port, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : BOOT2_Pin */
-  GPIO_InitStruct.Pin = BOOT2_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(BOOT2_GPIO_Port, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : ALERT2_Pin */
-  GPIO_InitStruct.Pin = ALERT2_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(ALERT2_GPIO_Port, &GPIO_InitStruct);
-
-  /*Configure GPIO pins : BOOT_Pin ALERT_Pin */
-  GPIO_InitStruct.Pin = BOOT_Pin|ALERT_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-
-  /*Configure GPIO pins : HEATER2_Pin HEATER1_Pin */
-  GPIO_InitStruct.Pin = HEATER2_Pin|HEATER1_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-
-  /* USER CODE BEGIN MX_GPIO_Init_2 */
-
-  /* USER CODE END MX_GPIO_Init_2 */
+    GPIO_InitTypeDef GPIO_InitStruct = {0}; /* Create structure for GPIO settings */
+    __HAL_RCC_GPIOC_CLK_ENABLE(); /* Enable clock for GPIOC (LED) */
+    __HAL_RCC_GPIOH_CLK_ENABLE(); /* Enable clock for GPIOH (unused) */
+    __HAL_RCC_GPIOA_CLK_ENABLE(); /* Enable clock for GPIOA (RS485 DE) */
+    __HAL_RCC_GPIOB_CLK_ENABLE(); /* Enable clock for GPIOB (heaters, inputs) */
+    HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_RESET); /* Set LED pin low */
+    HAL_GPIO_WritePin(RS4852_DE_GPIO_Port, RS4852_DE_Pin, GPIO_PIN_RESET); /* Set RS485 DE pin low */
+    HAL_GPIO_WritePin(GPIOB, HEATER2_Pin|HEATER1_Pin, GPIO_PIN_RESET); /* Set heater pins low */
+    GPIO_InitStruct.Pin = LED_Pin; /* Select LED pin */
+    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP; /* Set as push-pull output */
+    GPIO_InitStruct.Pull = GPIO_NOPULL; /* Disable pull resistors */
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW; /* Set low speed */
+    HAL_GPIO_Init(LED_GPIO_Port, &GPIO_InitStruct); /* Initialize LED pin */
+    GPIO_InitStruct.Pin = RS4852_DE_Pin; /* Select RS485 DE pin */
+    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP; /* Set as push-pull output */
+    GPIO_InitStruct.Pull = GPIO_NOPULL; /* Disable pull resistors */
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW; /* Set low speed */
+    HAL_GPIO_Init(RS4852_DE_GPIO_Port, &GPIO_InitStruct); /* Initialize DE pin */
+    GPIO_InitStruct.Pin = BOOT2_Pin; /* Select BOOT2 input pin */
+    GPIO_InitStruct.Mode = GPIO_MODE_INPUT; /* Set as input */
+    GPIO_InitStruct.Pull = GPIO_NOPULL; /* Disable pull resistors */
+    HAL_GPIO_Init(BOOT2_GPIO_Port, &GPIO_InitStruct); /* Initialize BOOT2 pin */
+    GPIO_InitStruct.Pin = ALERT2_Pin; /* Select ALERT2 input pin */
+    GPIO_InitStruct.Mode = GPIO_MODE_INPUT; /* Set as input */
+    GPIO_InitStruct.Pull = GPIO_NOPULL; /* Disable pull resistors */
+    HAL_GPIO_Init(ALERT2_GPIO_Port, &GPIO_InitStruct); /* Initialize ALERT2 pin */
+    GPIO_InitStruct.Pin = BOOT_Pin|ALERT_Pin; /* Select BOOT and ALERT pins */
+    GPIO_InitStruct.Mode = GPIO_MODE_INPUT; /* Set as inputs */
+    GPIO_InitStruct.Pull = GPIO_NOPULL; /* Disable pull resistors */
+    HAL_GPIO_Init(GPIOB, &GPIO_InitStruct); /* Initialize BOOT and ALERT pins */
+    GPIO_InitStruct.Pin = HEATER2_Pin|HEATER1_Pin; /* Select heater pins */
+    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP; /* Set as push-pull outputs */
+    GPIO_InitStruct.Pull = GPIO_NOPULL; /* Disable pull resistors */
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW; /* Set low speed */
+    HAL_GPIO_Init(GPIOB, &GPIO_InitStruct); /* Initialize heater pins */
 }
 
-/* USER CODE BEGIN 4 */
-/* USER CODE END 4 */
-
-/**
-  * @brief  This function is executed in case of error occurrence.
-  * @retval None
-  */
+/* Define function to handle errors
+ * Inputs: None
+ * Returns: void, meaning it returns nothing; it halts the program.
+ * What it does: Disables interrupts and enters an infinite loop to stop execution.
+ */
 void Error_Handler(void)
 {
-  /* USER CODE BEGIN Error_Handler_Debug */
-  /* User can add his own implementation to report the HAL error return state */
-  __disable_irq();
-  while (1)
-  {
-  }
-  /* USER CODE END Error_Handler_Debug */
+    __disable_irq(); /* Disable all interrupts */
+    while (1) /* Infinite loop to halt */
+    {
+    }
 }
 
-#ifdef  USE_FULL_ASSERT
-/**
-  * @brief  Reports the name of the source file and the source line number
-  *         where the assert_param error has occurred.
-  * @param  file: pointer to the source file name
-  * @param  line: assert_param error line source number
-  * @retval None
-  */
+#ifdef USE_FULL_ASSERT
+/* Define function to handle assertion failures
+ * Inputs:
+ * - file: Pointer to a string (uint8_t *) with the source file name.
+ * - line: Line number (uint32_t) where the assertion failed.
+ * Returns: void, meaning it returns nothing; it is used for debugging.
+ * What it does: Handles assertion failures in debug mode (empty implementation).
+ */
 void assert_failed(uint8_t *file, uint32_t line)
 {
-  /* USER CODE BEGIN 6 */
-  /* User can add his own implementation to report the file name and line number,
-     ex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
-  /* USER CODE END 6 */
 }
 #endif /* USE_FULL_ASSERT */

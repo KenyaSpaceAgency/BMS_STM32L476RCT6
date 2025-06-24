@@ -1,0 +1,11 @@
+../Core/Src/BQ76920/BQ76920.c:45:19:BQ76920_Init	2
+../Core/Src/BQ76920/BQ76920.c:63:19:BQ76920_ReadVoltages	4
+../Core/Src/BQ76920/BQ76920.c:89:19:BQ76920_ReadCurrent	3
+../Core/Src/BQ76920/BQ76920.c:111:19:BQ76920_BalanceCells	8
+../Core/Src/BQ76920/BQ76920.c:141:6:BQ76920_CheckProtection	4
+../Core/Src/BQ76920/BQ76920.c:160:19:BQ76920_SetChargeEnable	5
+../Core/Src/BQ76920/BQ76920.c:187:19:BQ76920_ReadStatus	2
+../Core/Src/BQ76920/BQ76920.c:201:19:BQ76920_ClearStatus	2
+../Core/Src/BQ76920/BQ76920.c:219:6:BQ76920_CheckRedundancy	4
+../Core/Src/BQ76920/BQ76920.c:240:19:BQ76920_ConfigureProtection	4
+../Core/Src/BQ76920/BQ76920.c:262:6:BQ76920_CheckStatus	19

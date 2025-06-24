@@ -28,6 +28,16 @@ extern "C" {
 
 /* Includes ------------------------------------------------------------------*/
 #include "stm32l4xx_hal.h"
+#include "stm32l4xx_hal_conf.h"
+#include "stm32l4xx_it.h"
+#include "ssp.h"
+#include "bq76920.h"
+#include "crc16.h"
+#include "pid.h"
+#include "kalman_filter.h"
+#include "BQ76920.h"
+#include "adc.h"
+#include "temperature.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -58,6 +68,9 @@ typedef struct {
 } BatteryConfig;
 
 extern BatteryConfig battery_config;
+extern I2C_HandleTypeDef hi2c1;
+extern I2C_HandleTypeDef hi2c2;
+extern I2C_HandleTypeDef hi2c3;
 
 #define NUM_GROUPS_PER_IC 4
 /* USER CODE END ET */
