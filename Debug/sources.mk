@@ -22,13 +22,8 @@ C_DEPS :=
 
 # Every subdirectory with source files must be described here
 SUBDIRS := \
-Core/Src/BQ76920 \
-Core/Src/Temperature \
+Core/Src/app \
 Core/Src \
-Core/Src/crc32 \
-Core/Src/kalman\ filter \
-Core/Src/pid \
-Core/Src/ssp \
 Core/Startup \
 Drivers/STM32L4xx_HAL_Driver/Src \
 

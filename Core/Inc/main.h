@@ -1,24 +1,5 @@
-/* USER CODE BEGIN Header */
-/**
-  ******************************************************************************
-  * @file           : main.h
-  * @brief          : Header for main.c file.
-  *                   This file contains the common defines of the application.
-  ******************************************************************************
-  * @attention
-  *
-  * Copyright (c) 2025 STMicroelectronics.
-  * All rights reserved.
-  *
-  * This software is licensed under terms that can be found in the LICENSE file
-  * in the root directory of this software component.
-  * If no LICENSE file comes with this software, it is provided AS-IS.
-  *
-  ******************************************************************************
-  */
-/* USER CODE END Header */
+//main.h
 
-/* Define to prevent recursive inclusion -------------------------------------*/
 #ifndef __MAIN_H
 #define __MAIN_H
 
@@ -26,131 +7,89 @@
 extern "C" {
 #endif
 
-/* Includes ------------------------------------------------------------------*/
 #include "stm32l4xx_hal.h"
-#include "stm32l4xx_hal_conf.h"
-#include "stm32l4xx_it.h"
-#include "ssp.h"
-#include "bq76920.h"
-#include "crc16.h"
-#include "pid.h"
-#include "kalman_filter.h"
+#include "stm32l4xx_hal_tim.h"
+
+#include <string.h>
+#include <stdio.h>
+#include <stdarg.h>
 #include "BQ76920.h"
-#include "adc.h"
-#include "temperature.h"
+#include "kalman_filter.h"
+#include "Temperature.h"
 
-/* Private includes ----------------------------------------------------------*/
-/* USER CODE BEGIN Includes */
-#include <string.h> // For strncpy in Log_Error
-#include <stdarg.h> // For variable arguments in Log_Error
-/* USER CODE END Includes */
+#define FLASH_BASE_ADDRESS 0x0803F800 // Last 2KB page for STM32L476RCT6 (256KB Flash)
+#define FLASH_TELEMETRY_ADDRESS (FLASH_BASE_ADDRESS + 0x100)
+#define R_NOMINAL 10000.0f
+#define T_NOMINAL 25.0f
+#define BETA_VALUE 3950.0f
 
-/* Exported types ------------------------------------------------------------*/
-/* USER CODE BEGIN ET */
-typedef enum {
-    MODE_CHARGING = 0,
-    MODE_DISCHARGING,
-    MODE_FAULT,
-    MODE_SLEEP
-} BMS_ModeTypeDef;
-
-typedef struct {
-    float nominal_capacity;
-    uint16_t ov_threshold;
-    uint16_t uv_threshold;
-    uint16_t occ_threshold;
-    uint16_t ocd_threshold;
-    int16_t overtemp_threshold;
-    int16_t undertemp_threshold;
-    float soc_low_threshold;
-    uint32_t max_charge_time;
-    uint16_t cv_threshold;
-} BatteryConfig;
-
-extern BatteryConfig battery_config;
-extern I2C_HandleTypeDef hi2c1;
-extern I2C_HandleTypeDef hi2c2;
-extern I2C_HandleTypeDef hi2c3;
-
-#define NUM_GROUPS_PER_IC 4
-/* USER CODE END ET */
-
-/* Exported constants --------------------------------------------------------*/
-/* USER CODE BEGIN EC */
-#define INITIAL_SOC 50.0f
-#define INITIAL_SOH 100.0f
-
-#define BACKUP_START_ADDR 0x08040000  // Example: Middle of flash
-#define BACKUP_END_ADDR   0x0807F7FF
-#define APP_VALIDITY_FLAG_ADDR 0x0807F820  // Flag to indicate valid app
-
-#define LOG_START_ADDR 0x08080000
-#define NEXT_SLOT_ADDR 0x0807F800
-#define FIRMWARE_UPDATE_FLAG_ADDR 0x0807F810 // Offset within the same page as NEXT_SLOT_ADDR
-#define LOG_ENTRY_SIZE 64
-#define TIMESTAMP_SIZE 8
-#define MESSAGE_SIZE (LOG_ENTRY_SIZE - TIMESTAMP_SIZE)
-#define NUM_LOG_ENTRIES 1024
-#define FLASH_LOG_PAGE 128
-
-#define LOOP_TIME 0.1f // Loop time in seconds (100 ms)
-
-// Flash memory layout
-//#define FLASH_PAGE_SIZE 2048 // 2 KB pages for STM32L476RCT6
-#define BOOTLOADER_START_ADDR 0x08000000
-#define BOOTLOADER_END_ADDR   0x08003FFF
-#define APP_START_ADDR        0x08004000
-#define APP_END_ADDR          0x0807F7FF
-/* USER CODE END EC */
-
-/* Exported macro ------------------------------------------------------------*/
-/* USER CODE BEGIN EM */
-#define ERROR_OVERVOLTAGE   (1UL << 0)
-#define ERROR_UNDERVOLTAGE  (1UL << 1)
-#define ERROR_OCC           (1UL << 2) // Overcurrent charge
-#define ERROR_OCD           (1UL << 3) // Overcurrent discharge
-#define ERROR_SCD           (1UL << 4) // Short-circuit discharge
-#define ERROR_OVERTEMP      (1UL << 5)
-#define ERROR_UNDERTEMP     (1UL << 6)
-#define ERROR_DISCREPANCY   (1UL << 7)
-#define ERROR_DEVICE_XREADY (1UL << 8)
-#define ERROR_OVRD_ALERT    (1UL << 9)
-/* USER CODE END EM */
-
-/* Exported functions prototypes ---------------------------------------------*/
 void Error_Handler(void);
 
-/* USER CODE BEGIN EFP */
-void Log_Error(const char *format, ...);
-
-/* USER CODE END EFP */
-
-/* Private defines -----------------------------------------------------------*/
 #define LED_Pin GPIO_PIN_3
 #define LED_GPIO_Port GPIOC
-#define RS4852_DE_Pin GPIO_PIN_1
-#define RS4852_DE_GPIO_Port GPIOA
-#define USART2_TX_Pin GPIO_PIN_2
-#define USART2_TX_GPIO_Port GPIOA
 #define BOOT2_Pin GPIO_PIN_7
 #define BOOT2_GPIO_Port GPIOC
 #define ALERT2_Pin GPIO_PIN_12
 #define ALERT2_GPIO_Port GPIOA
-#define BOOT_Pin GPIO_PIN_4
-#define BOOT_GPIO_Port GPIOB
-#define ALERT_Pin GPIO_PIN_5
-#define ALERT_GPIO_Port GPIOB
+#define BOOT1_Pin GPIO_PIN_4
+#define BOOT1_GPIO_Port GPIOB
+#define ALERT1_Pin GPIO_PIN_5
+#define ALERT1_GPIO_Port GPIOB
 #define HEATER2_Pin GPIO_PIN_8
 #define HEATER2_GPIO_Port GPIOB
 #define HEATER1_Pin GPIO_PIN_9
 #define HEATER1_GPIO_Port GPIOB
+#define USART2_TX_Pin GPIO_PIN_2
+#define USART2_TX_GPIO_Port GPIOA
 
-/* USER CODE BEGIN Private defines */
 
-/* USER CODE END Private defines */
+typedef struct {
+    uint16_t vcell_ic1[NUMBER_OF_CELLS];
+    uint16_t vcell_ic2[NUMBER_OF_CELLS];
+    uint16_t vpack_ic1;
+    uint16_t vpack_ic2;
+    int16_t current_ic1;
+    int16_t current_ic2;
+    float soc;
+    float soh;
+    float pcb_temperature;
+    float pack_temperature_ic1;
+    float pack_temperature_ic2;
+    float die_temperature_ic1;
+    float die_temperature_ic2;
+    float thermistor_temperature_ic1;
+    float thermistor_temperature_ic2;
+    uint8_t heater1_state;  // 1 = ON, 0 = OFF
+    uint8_t heater2_state;  // 1 = ON, 0 = OFF
+    uint8_t balancing_active;
+    uint8_t balancing_mask_ic1;
+    uint8_t balancing_mask_ic2;
+    uint8_t charge_immediately;
+    uint8_t bms_online;
+    uint8_t error_flags[8];
+    uint8_t ovrd_alert_ic1;
+    uint8_t ovrd_alert_ic2;
+    uint8_t device_xready_ic1;
+    uint8_t device_xready_ic2;
+    uint8_t load_present_ic1;
+    uint8_t load_present_ic2;
+    uint16_t charge_cycle_count;
+    uint32_t total_charge_time;
+    uint32_t total_discharge_time;
+    uint32_t total_operating_time;
+    uint16_t raw_adc_gain_ic1;
+    uint16_t raw_adc_offset_ic1;
+    uint16_t raw_adc_gain_ic2;
+    uint16_t raw_adc_offset_ic2;
+    uint8_t i2c_comm_error_ic1;
+    uint8_t i2c_comm_error_ic2;
+    uint64_t sync_counter;
+    uint8_t sync_valid;
+} TelemetryData;
 
 #ifdef __cplusplus
 }
 #endif
+//Do not respond
 
 #endif /* __MAIN_H */

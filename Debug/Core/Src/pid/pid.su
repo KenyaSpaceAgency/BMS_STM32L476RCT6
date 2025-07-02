@@ -1,4 +1,0 @@
-../Core/Src/pid/pid.c:50:13:PowerSwitch_Init	8	static
-../Core/Src/pid/pid.c:67:13:PowerSwitch_Control	24	static
-../Core/Src/pid/pid.c:89:6:PID_Init	8	static
-../Core/Src/pid/pid.c:108:6:PID_Control	136	static

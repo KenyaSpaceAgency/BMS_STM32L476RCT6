@@ -1,2 +1,0 @@
-../Core/Src/Temperature/temperature.c:44:19:Temperature_Init	40	static
-../Core/Src/Temperature/temperature.c:77:19:Temperature_Read	56	static

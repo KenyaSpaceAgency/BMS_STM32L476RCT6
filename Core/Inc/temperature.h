@@ -1,62 +1,127 @@
-/* USER CODE BEGIN Header */
-/**
-  ******************************************************************************
-  * @file           : temperature.h
-  * @brief          : Header for temperature.c file.
-  *                   This file contains the common defines for temperature sensing.
-  ******************************************************************************
-  * @attention
-  *
-  * Copyright (c) 2025 STMicroelectronics.
-  * All rights reserved.
-  *
-  * This software is licensed under terms that can be found in the LICENSE file
-  * in the root directory of this software component.
-  * If no LICENSE file comes with this software, it is provided AS-IS.
-  *
-  ******************************************************************************
-  */
-/* USER CODE END Header */
+/*
+ * Temperature.h
+ *
+ *  Created on: Jul 2, 2025
+ *      Author: yomue
+ */
 
-/* Define to prevent recursive inclusion -------------------------------------*/
+// Temperature.h - Header file for temperature sensor and heater control
+
 #ifndef __TEMPERATURE_H
 #define __TEMPERATURE_H
+
+#include "main.h"
+#include "stm32l4xx_hal.h"
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-/* Includes ------------------------------------------------------------------*/
-#include "main.h"
+// ===================== TMP100 Temperature Sensor =====================
 
-/* Exported constants --------------------------------------------------------*/
-/* USER CODE BEGIN EC */
-#define TMP100_I2C_ADDRESS_1 0x48 // I2C address for NTC-1 (ADD1=0, ADD0=0)
-#define TMP100_I2C_ADDRESS_2 0x49 // I2C address for NTC-2 (ADD1=0, ADD0=Float)
-#define TMP100_TEMP_REG      0x00 // Temperature Register
-#define TMP100_CONFIG_REG    0x01 // Configuration Register
+// I2C addresses (left-shifted for HAL)
+#define TMP100_IC1_ADDR     (0x48 << 1)  // Sensor 1
+#define TMP100_IC2_ADDR     (0x49 << 1)  // Sensor 2
 
-// Configuration Register bit definitions (datasheet Section 7.5.3)
-#define TMP100_SD           (1 << 0) // Shutdown Mode (0=continuous, 1=shutdown)
-#define TMP100_TM           (1 << 1) // Thermostat Mode (0=comparator, 1=interrupt)
-#define TMP100_POL          (1 << 2) // Polarity (0=active low, 1=active high)
-#define TMP100_F0           (1 << 3) // Fault Queue bit 0
-#define TMP100_F1           (1 << 4) // Fault Queue bit 1
-#define TMP100_R0           (1 << 5) // Resolution bit 0
-#define TMP100_R1           (1 << 6) // Resolution bit 1
-#define TMP100_OS           (1 << 7) // One-Shot (0=continuous, 1=one-shot in shutdown)
-/* USER CODE END EC */
+// TMP100 Register Map
+#define TMP100_TEMP_REG     0x00         // Temperature register
+#define TMP100_CONFIG_REG   0x01         // Configuration register
 
-/* Exported functions prototypes ---------------------------------------------*/
-HAL_StatusTypeDef Temperature_Init(I2C_HandleTypeDef *hi2c1, I2C_HandleTypeDef *hi2c2);
-HAL_StatusTypeDef Temperature_Read(I2C_HandleTypeDef *hi2c1, I2C_HandleTypeDef *hi2c2, int16_t *temperature_1, int16_t *temperature_2);
 
-/* USER CODE BEGIN EFP */
+// ===================== Heater GPIO Control IDs =====================
 
-/* USER CODE END EFP */
+#define HEATER_1            1
+#define HEATER_2            2
+
+
+// ===================== PID Control Constants =====================
+
+// Desired target temperature (in °C)
+#define TARGET_TEMP         25.0f
+
+// Safety hard cutoff (°C). Beyond this, heaters shut off.
+#define TEMP_UPPER_LIMIT    60.0f
+
+// PID coefficients — tuned empirically
+#define KP                  1.0f
+#define KI                  0.1f
+#define KD                  0.05f
+
+// Control loop interval (seconds)
+#define DT                  1.0f
+
+
+// ===================== Public Function Prototypes =====================
+
+/**
+ * @brief Reads temperature from TMP100 over I2C.
+ * @param hi2c       I2C handle pointer
+ * @param i2c_addr   TMP100 address (e.g., TMP100_IC1_ADDR)
+ * @return Temperature in Celsius, or -273.15 if error
+ */
+float TMP100_ReadTemperature(I2C_HandleTypeDef *hi2c, uint8_t i2c_addr);
+
+/**
+ * @brief Initializes PID state and disables both heaters.
+ */
+void Temperature_Init(void);
+
+/**
+ * @brief Runs PID controller to adjust heater power based on temperature.
+ * @param current_temperature Temperature in Celsius
+ */
+void Temperature_PID_Control(float current_temperature);
+
+/**
+ * @brief Turns on Heater 1 manually.
+ */
+void Heater1_On(void);
+
+/**
+ * @brief Turns off Heater 1 manually.
+ */
+void Heater1_Off(void);
+
+/**
+ * @brief Turns on Heater 2 manually.
+ */
+void Heater2_On(void);
+
+/**
+ * @brief Turns off Heater 2 manually.
+ */
+void Heater2_Off(void);
+
+/**
+ * @brief General-purpose manual control of either heater.
+ * @param heater ID (HEATER_1 or HEATER_2)
+ * @param enable 1 = ON, 0 = OFF
+ */
+void Set_Heater(uint8_t heater, uint8_t enable);
+
+
+/**
+ * @brief Initializes the TMP100 sensor configuration.
+ * @param hi2c     I2C handle pointer
+ * @param address  TMP100 I2C address (e.g., TMP100_IC1_ADDR)
+ */
+void TMP100_Configure(I2C_HandleTypeDef *hi2c, uint8_t address);
+
+
+
+/**
+ * @brief Runs the PID control loop for heater management.
+ * @param temp Current temperature reading
+ */
+void PID_Init(void);  // Ensure this exists
+
+void Log_Error(const char *format, ...);
+
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* __TEMPERATURE_H */
+#endif // __TEMPERATURE_H
+//Do not respond

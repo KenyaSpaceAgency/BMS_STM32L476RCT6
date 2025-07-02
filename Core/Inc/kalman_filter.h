@@ -1,40 +1,27 @@
-/*
- * kalman_filter.h
- *
- *  Created on: Mar 29, 2025
- *      Author: yomue
- */
+// Header guard to prevent the file from being included multiple times
+#ifndef INC_KALMANFILTER_H_
+#define INC_KALMANFILTER_H_
 
-#ifndef KALMAN_FILTER_H_
-#define KALMAN_FILTER_H_
-
-/**
-  * @brief Structure to hold Kalman Filter parameters and state
-  */
+// Define a data structure to hold all the variables needed for the Kalman filter
 typedef struct {
-    float state;              // Estimated state (e.g., SOC, SOH)
-    float variance;           // Estimate uncertainty (covariance)
-    float process_noise;      // Process noise covariance (Q)
-    float measurement_noise;  // Measurement noise covariance (R)
+    float x;  // Estimated state (e.g., battery voltage, temperature, etc.)
+    float P;  // Estimate error covariance (uncertainty in the estimate)
+    float Q;  // Process noise covariance (uncertainty in how the state changes)
+    float R;  // Measurement noise covariance (uncertainty in the measurements)
 } KalmanFilter;
 
-/**
-  * @brief  Initializes the Kalman Filter with initial conditions
-  * @param  kf: Pointer to the Kalman Filter structure
-  * @param  initial_state: Initial estimate of the state (e.g., SOC in %)
-  * @param  initial_variance: Initial uncertainty in the state estimate
-  * @param  process_noise: Process noise covariance (Q)
-  * @param  measurement_noise: Measurement noise covariance (R)
-  * @retval None
-  */
-void KalmanFilter_Init(KalmanFilter *kf, float initial_state, float initial_variance, float process_noise, float measurement_noise);
+// Function to initialize the Kalman filter
+// kf: Pointer to the KalmanFilter structure
+// initial_state_estimate: Your best guess of the initial value
+// initial_estimate_error_cov: How uncertain you are about that initial guess
+// measurement_noise_cov: How noisy your sensor is (larger = noisier)
+void kalman_filter_init(KalmanFilter *kf, float initial_state_estimate, float initial_estimate_error_cov, float measurement_noise_cov);
 
-/**
-  * @brief  Updates the Kalman Filter with a new measurement
-  * @param  kf: Pointer to the Kalman Filter structure
-  * @param  measurement: New measurement value (e.g., SOC in %)
-  * @retval Updated state estimate
-  */
-float KalmanFilter_Update(KalmanFilter *kf, float measurement);
+// Function to update the Kalman filter with a new measurement
+// kf: Pointer to the KalmanFilter structure
+// z: New sensor measurement
+// measurement_noise_cov: Optional—if sensor noise changes over time, you can update it here
+float kalman_filter_update(KalmanFilter *kf, float z, float measurement_noise_cov);
 
-#endif /* KALMAN_FILTER_H_ */
+// End of the header guard
+#endif /* INC_KALMANFILTER_H_ */

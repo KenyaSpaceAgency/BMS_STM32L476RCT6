@@ -1,0 +1,6 @@
+../Core/Src/app/flash.c:29:10:CalculateCRC16	32	static
+../Core/Src/app/flash.c:56:19:Flash_WriteDoubleWord	32	static
+../Core/Src/app/flash.c:85:10:Flash_ReadDoubleWord	16	static
+../Core/Src/app/flash.c:105:19:Flash_ErasePage	40	static
+../Core/Src/app/flash.c:144:6:Flash_WriteTelemetry	176	static
+../Core/Src/app/flash.c:196:6:Flash_ReadTelemetry	160	static
