@@ -161,3 +161,7 @@ extern BQ76920_t bms_instance2;  // Optional second BMS IC for redundancy or mul
 extern TelemetryData telemetry;  // Global structure holding current telemetry data
 
 #endif /* BMS_SERVICE_H */
+
+
+
+/* */

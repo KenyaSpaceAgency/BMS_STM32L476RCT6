@@ -19,6 +19,8 @@ extern "C" {
 #define FLASH_USER_START_ADDR  ((uint32_t)0x0803F800)  // Last 2KB of 256KB flash
 #define FLASH_USER_END_ADDR    ((uint32_t)0x0803FFFF)
 #define FLASH_PAGE_SIZE        ((uint32_t)0x800)       // 2KB per page
+#define SNAPSHOT_SIZE          sizeof(TelemetrySnapshot)
+#define MAX_SNAPSHOTS          (FLASH_PAGE_SIZE / SNAPSHOT_SIZE)
 
 // --- Telemetry versioning ---
 #define TELEMETRY_VERSION      0x01
@@ -29,9 +31,11 @@ uint64_t Flash_ReadDoubleWord(uint32_t address);
 HAL_StatusTypeDef Flash_ErasePage(void);
 void Flash_WriteTelemetry(void);
 void Flash_ReadTelemetry(void);
+void Flash_RecoverWritePointer(void);
 
 // --- CRC16 utility (used internally but may be reused externally) ---
 uint16_t CalculateCRC16(const uint8_t *data, uint32_t length);
+
 
 // Structure: TelemetrySnapshot
 // Purpose:

@@ -3,7 +3,7 @@
 ../Core/Src/app/Temperature.c:81:13:PowerSwitch_Init	8	static
 ../Core/Src/app/Temperature.c:97:13:PowerSwitch_Control	24	static
 ../Core/Src/app/Temperature.c:136:6:PID_Init	8	static
-../Core/Src/app/Temperature.c:158:6:PID_Control	72	static
+../Core/Src/app/Temperature.c:158:6:PID_Control	80	static
 ../Core/Src/app/Temperature.c:239:6:TMP100_Configure	32	static
 ../Core/Src/app/Temperature.c:263:6:Heater1_On	8	static
 ../Core/Src/app/Temperature.c:277:6:Heater2_On	8	static

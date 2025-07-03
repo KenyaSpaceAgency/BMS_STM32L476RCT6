@@ -29,8 +29,9 @@ static void MX_USART1_UART_Init(void); // Initializes UART1 for logging
 static void MX_ADC1_Init(void);    // Initializes ADC for temperature
 static void MX_TIM2_Init(void);    // Initializes Timer 2 for timing
 
-// Declare error logging function (defined later)
-void Log_Error(const char *format, ...);
+
+
+
 
 // Initialize global BMS instances for two BQ76920 chips
 BQ76920_t bms_instance1 = {0};    // First BQ76920 instance (I2C1)
@@ -68,6 +69,7 @@ int main(void) {
     MX_ADC1_Init();
     // Initialize Timer 2 for system timing
     MX_TIM2_Init();
+    Flash_RecoverWritePointer(); // Recover the last write pointer for flash storage
 
     // Start Timer 2 to begin counting (used for system ticks)
     HAL_TIM_Base_Start(&htim2);
@@ -91,6 +93,7 @@ int main(void) {
     // Flag to track low-power mode (1=low power, 0=normal)
     uint8_t low_power_mode = 0;
 
+
     // Main loop: runs forever, managing the BMS
     while (1) {
         // Get the current system tick (milliseconds)
@@ -113,6 +116,9 @@ int main(void) {
             BMS_Service_HandleLowPowerCondition(&low_power_mode);
             // Save telemetry to flash if needed
             BMS_Service_HandleFlashStorage();
+            Log_Telemetry(BMS_MSG_LEVEL_DEBUG, &telemetry); // Log telemetry data for debugging
+
+
         }
 
         // If in low-power mode, try to wake BQ76920 chips
@@ -644,32 +650,10 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
         // Update load detection alert for second BQ76920
         telemetry.load_present_ic2 = getAlert(&bms_instance2, 7);
         // Log an alert event
-        Log_Error("Alert triggered on BMS");
+        Log_Message(BMS_MSG_LEVEL_ERROR, "Alert triggered on BMS");
     }
 }
 
-// Function: Log_Error
-// Inputs:
-//   - format: A string (const char*), the error message format
-//   - ...: Variable arguments for formatting (like printf)
-// Output:
-//   - None (void), sends error message over UART1
-// Significance:
-//   - Logs error messages to a serial terminal for debugging, used throughout the project.
-void Log_Error(const char *format, ...) {
-    // Declare buffer to hold formatted message
-    char buffer[128];
-    // Declare variable argument list
-    va_list args;
-    // Initialize argument list
-    va_start(args, format);
-    // Format message into buffer
-    vsnprintf(buffer, sizeof(buffer), format, args);
-    // Clean up argument list
-    va_end(args);
-    // Send message over UART1
-    HAL_UART_Transmit(&huart1, (uint8_t*)buffer, strlen(buffer), HAL_MAX_DELAY);
-}
 
 // Function: Error_Handler
 // Inputs:

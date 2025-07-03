@@ -120,7 +120,7 @@ static void PowerSwitch_Control(uint8_t heater, uint8_t enable) {
 
         default: // If an invalid heater ID is provided
             // Log an error message using the UART (defined in main.c)
-            Log_Error("PID: Invalid heater ID %d", heater);
+        	Log_Message(BMS_MSG_LEVEL_ERROR,"PID: Invalid heater ID %d", heater);
             break;
     }
 }
@@ -159,7 +159,7 @@ void PID_Control(float temp) {
     // Check if temperature is invalid (outside -100°C to 150°C)
     if (temp < -100 || temp > 150) {
         // Log an error message if temperature is unrealistic
-        Log_Error("PID: Skipping control, invalid temp: %d", temp);
+    	Log_Message(BMS_MSG_LEVEL_ERROR,"PID: Skipping control, invalid temp: %d", temp);
         // Exit the function to avoid using bad data
         return;
     }
@@ -177,7 +177,7 @@ void PID_Control(float temp) {
             // Reset the previous error
             previous_error = 0.0f;
             // Log an emergency shutdown message
-            Log_Error("PID: Emergency shutdown. Temp = %d°C", temp);
+            Log_Message(BMS_MSG_LEVEL_ERROR,"PID: Emergency shutdown. Temp = %d°C", temp);
         }
         // Exit to prevent further processing
         return;
@@ -219,7 +219,7 @@ void PID_Control(float temp) {
         // Update Heater 2 to the new state
         PowerSwitch_Control(HEATER_2, new_heater_state);
         // Log the heater state change, temperature, PID output, and error
-        Log_Error("PID: Heaters %s | Temp: %d°C | Out: %.2f | Err: %.2f",
+        Log_Message(BMS_MSG_LEVEL_ERROR,"PID: Heaters %s | Temp: %d°C | Out: %.2f | Err: %.2f",
                   new_heater_state ? "ON" : "OFF", temp, output, error);
     }
 
@@ -246,7 +246,7 @@ void TMP100_Configure(I2C_HandleTypeDef *hi2c, uint8_t address) {
     // Send configuration data to the TMP100 sensor
     if (HAL_I2C_Master_Transmit(hi2c, address, config_data, 2, HAL_MAX_DELAY) != HAL_OK) {
         // Log an error if configuration fails
-        Log_Error("TMP100 config write failed (address 0x%02X)", address);
+    	Log_Message(BMS_MSG_LEVEL_ERROR,"TMP100 config write failed (address 0x%02X)", address);
     }
 
     // Wait 10ms to ensure the TMP100 applies the configuration
@@ -264,7 +264,7 @@ void Heater1_On(void) {
     // Turn on Heater 1 and log the action
     PowerSwitch_Control(HEATER_1, 1);
     // Log a message to indicate Heater 1 was turned on
-    Log_Error("Heater 1 manually turned ON");
+    Log_Message(BMS_MSG_LEVEL_ERROR,"Heater 1 manually turned ON");
 }
 
 // Function: Heater2_On
@@ -278,7 +278,7 @@ void Heater2_On(void) {
     // Turn on Heater 2 and log the action
     PowerSwitch_Control(HEATER_2, 1);
     // Log a message to indicate Heater 2 was turned on
-    Log_Error("Heater 2 manually turned ON");
+    Log_Message(BMS_MSG_LEVEL_ERROR,"Heater 2 manually turned ON");
 }
 
 // Function: Heater1_Off
@@ -292,7 +292,7 @@ void Heater1_Off(void) {
     // Turn off Heater 1 and log the action
     PowerSwitch_Control(HEATER_1, 0);
     // Log a message to indicate Heater 1 was turned off
-    Log_Error("Heater 1 manually turned OFF");
+    Log_Message(BMS_MSG_LEVEL_ERROR,"Heater 1 manually turned OFF");
 }
 
 // Function: Heater2_Off
@@ -306,5 +306,5 @@ void Heater2_Off(void) {
     // Turn off Heater 2 and log the action
     PowerSwitch_Control(HEATER_2, 0);
     // Log a message to indicate Heater 2 was turned off
-    Log_Error("Heater 2 manually turned OFF");
+    Log_Message(BMS_MSG_LEVEL_ERROR,"Heater 2 manually turned OFF");
 }

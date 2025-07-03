@@ -1,5 +1,6 @@
 "./Core/Src/app/BMS_Service.o"
 "./Core/Src/app/BQ76920.o"
+"./Core/Src/app/Log.o"
 "./Core/Src/app/Temperature.o"
 "./Core/Src/app/flash.o"
 "./Core/Src/app/i2c_comm.o"

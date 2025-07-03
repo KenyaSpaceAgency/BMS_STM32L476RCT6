@@ -87,6 +87,9 @@ typedef struct {
     uint8_t sync_valid;
 } TelemetryData;
 
+#include "log.h"
+
+
 #ifdef __cplusplus
 }
 #endif

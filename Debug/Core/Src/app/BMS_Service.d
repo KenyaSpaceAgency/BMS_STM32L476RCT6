@@ -36,8 +36,9 @@ Core/Src/app/BMS_Service.o: ../Core/Src/app/BMS_Service.c \
  ../Drivers/STM32L4xx_HAL_Driver/Inc/stm32l4xx_hal_uart.h \
  ../Drivers/STM32L4xx_HAL_Driver/Inc/stm32l4xx_hal_uart_ex.h \
  ../Core/Inc/BQ76920.h ../Core/Inc/kalman_filter.h \
- ../Core/Inc/Temperature.h ../Core/Inc/main.h ../Core/Inc/bq76920.h \
- ../Core/Inc/flash.h ../Core/Inc/BMS_Service.h ../Core/Inc/temperature.h
+ ../Core/Inc/Temperature.h ../Core/Inc/main.h ../Core/Inc/log.h \
+ ../Core/Inc/bms_service.h ../Core/Inc/bq76920.h ../Core/Inc/flash.h \
+ ../Core/Inc/BMS_Service.h ../Core/Inc/flash.h ../Core/Inc/temperature.h
 ../Core/Inc/main.h:
 ../Drivers/STM32L4xx_HAL_Driver/Inc/stm32l4xx_hal.h:
 ../Core/Inc/stm32l4xx_hal_conf.h:
@@ -79,7 +80,10 @@ Core/Src/app/BMS_Service.o: ../Core/Src/app/BMS_Service.c \
 ../Core/Inc/kalman_filter.h:
 ../Core/Inc/Temperature.h:
 ../Core/Inc/main.h:
+../Core/Inc/log.h:
+../Core/Inc/bms_service.h:
 ../Core/Inc/bq76920.h:
 ../Core/Inc/flash.h:
 ../Core/Inc/BMS_Service.h:
+../Core/Inc/flash.h:
 ../Core/Inc/temperature.h:

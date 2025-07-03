@@ -39,7 +39,7 @@ void UpdateSyncCounterFromBytes(uint8_t *bytes) {
 
 void I2C_Comm_Init(void) {
     if (HAL_I2C_Slave_Receive_DMA(&hi2c3, i2c3_rx_buffer, sizeof(i2c3_rx_buffer)) != HAL_OK) {
-        Log_Error("I2C3 RX DMA init failed\n");
+    	Log_Message(BMS_MSG_LEVEL_ERROR,"I2C3 RX DMA init failed\n");
     }
 }
 
@@ -51,7 +51,7 @@ void HAL_I2C_SlaveRxCpltCallback(I2C_HandleTypeDef *hi2c) {
         uint8_t crc_computed = EPS_I2C_CRC8(i2c3_rx_buffer, 2 + len);
 
         if (crc_computed != crc_received) {
-            Log_Error("I2C3 CRC mismatch: expected 0x%02X, got 0x%02X\n", crc_computed, crc_received);
+        	Log_Message(BMS_MSG_LEVEL_ERROR,"I2C3 CRC mismatch: expected 0x%02X, got 0x%02X\n", crc_computed, crc_received);
             goto restart_dma;
         }
 
@@ -103,7 +103,7 @@ void HAL_I2C_SlaveRxCpltCallback(I2C_HandleTypeDef *hi2c) {
                 i2c3_tx_buffer[pos++] = crc;
 
                 if (HAL_I2C_Slave_Transmit(&hi2c3, i2c3_tx_buffer, pos, 100) != HAL_OK)
-                    Log_Error("I2C3 TX failed: RAM telemetry");
+                	Log_Message(BMS_MSG_LEVEL_ERROR,"I2C3 TX failed: RAM telemetry");
                 break;
             }
 
@@ -114,7 +114,7 @@ void HAL_I2C_SlaveRxCpltCallback(I2C_HandleTypeDef *hi2c) {
 
                 uint16_t expected_crc = CalculateCRC16((uint8_t*)&snapshot, sizeof(snapshot) - sizeof(uint16_t));
                 if (snapshot.crc != expected_crc || snapshot.version != TELEMETRY_VERSION) {
-                    Log_Error("Invalid flashed telemetry: CRC 0x%04X != 0x%04X or version mismatch",
+                	Log_Message(BMS_MSG_LEVEL_ERROR,"Invalid flashed telemetry: CRC 0x%04X != 0x%04X or version mismatch",
                               expected_crc, snapshot.crc);
                     break;
                 }
@@ -128,14 +128,14 @@ void HAL_I2C_SlaveRxCpltCallback(I2C_HandleTypeDef *hi2c) {
                 i2c3_tx_buffer[pos++] = crc;
 
                 if (HAL_I2C_Slave_Transmit(&hi2c3, i2c3_tx_buffer, pos, 100) != HAL_OK)
-                    Log_Error("I2C3 TX failed: Flashed telemetry");
+                	Log_Message(BMS_MSG_LEVEL_ERROR,"I2C3 TX failed: Flashed telemetry");
                 break;
             }
         }
 
     restart_dma:
         if (HAL_I2C_Slave_Receive_DMA(&hi2c3, i2c3_rx_buffer, sizeof(i2c3_rx_buffer)) != HAL_OK) {
-            Log_Error("I2C3 RX DMA restart failed\n");
+        	Log_Message(BMS_MSG_LEVEL_ERROR,"I2C3 RX DMA restart failed\n");
         }
     }
 }

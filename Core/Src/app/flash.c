@@ -4,6 +4,7 @@
 #include "stm32l4xx_hal_flash_ex.h"    // STM32 HAL library for extended flash operations (e.g., page erase)
 #include "main.h"                      // Main project header with TelemetryData and GPIO definitions
 #include <string.h>                    // Includes memory functions like memset and memcpy for data handling
+#include "log.h"
 
 // Define constants for the flash memory region used to store telemetry data
 #define FLASH_USER_END_ADDR    ((uint32_t)0x0803FFFF) // End of last 2KB page
@@ -14,8 +15,8 @@
 extern TelemetryData telemetry;                        // Global structure to store battery data (voltages, temperatures, etc.)
 extern UART_HandleTypeDef huart1;                      // UART interface (PA9/PA10) for logging errors
 
-// Declare error logging function (defined in main.c)
-void Log_Error(const char *format, ...);
+static uint32_t current_flash_addr = FLASH_USER_START_ADDR;
+
 
 // Function: CalculateCRC16
 // Inputs:
@@ -57,7 +58,7 @@ HAL_StatusTypeDef Flash_WriteDoubleWord(uint32_t address, uint64_t data) {
     // Check if the address is within the allowed range (0x0803F800 to 0x0803FFFF)
     if (address < FLASH_USER_START_ADDR || address > FLASH_USER_END_ADDR) {
         // Log an error if the address is invalid
-        Log_Error("Flash write address out of range: 0x%08lX", address);
+        Log_Message(BMS_MSG_LEVEL_ERROR,"Flash write address out of range: 0x%08lX", address);
         // Return error status
         return HAL_ERROR;
     }
@@ -69,7 +70,7 @@ HAL_StatusTypeDef Flash_WriteDoubleWord(uint32_t address, uint64_t data) {
     HAL_FLASH_Lock(); // Lock the flash memory to prevent accidental writes
     // If the write failed, log the error with the address and error code
     if (status != HAL_OK) {
-        Log_Error("Flash write failed at 0x%08lX, error: %lu", address, HAL_FLASH_GetError());
+    	Log_Message(BMS_MSG_LEVEL_ERROR,"Flash write failed at 0x%08lX, error: %lu", address, HAL_FLASH_GetError());
     }
     return status; // Return the status (HAL_OK or HAL_ERROR)
 }
@@ -86,7 +87,7 @@ uint64_t Flash_ReadDoubleWord(uint32_t address) {
     // Check if the address is within the allowed range
     if (address < FLASH_USER_START_ADDR || address > FLASH_USER_END_ADDR) {
         // Log an error if the address is invalid
-        Log_Error("Flash read address out of range: 0x%08lX", address);
+    	Log_Message(BMS_MSG_LEVEL_ERROR,"Flash read address out of range: 0x%08lX", address);
         // Return all 1s (0xFFFFFFFFFFFFFFFF) to indicate an error
         return 0xFFFFFFFFFFFFFFFFULL;
     }
@@ -127,7 +128,7 @@ HAL_StatusTypeDef Flash_ErasePage(void) {
 
     // If the erase failed, log the error with page number and error code
     if (status != HAL_OK) {
-        Log_Error("Flash erase failed at page %u, error: %lu", eraseInit.Page, HAL_FLASH_GetError());
+    	Log_Message(BMS_MSG_LEVEL_ERROR,"Flash erase failed at page %u, error: %lu", eraseInit.Page, HAL_FLASH_GetError());
     }
     return status; // Return the status (HAL_OK or HAL_ERROR)
 }
@@ -142,48 +143,36 @@ HAL_StatusTypeDef Flash_ErasePage(void) {
 //     ensuring it persists across power cycles. Uses CRC16 and versioning for data integrity.
 //     Called by BMS_Service.c when SOC changes or every 5 minutes.
 void Flash_WriteTelemetry(void) {
-    // Declare a TelemetrySnapshot structure to hold data, version, and CRC
     TelemetrySnapshot snapshot;
 
-    // Set the version number to track the telemetry format
-    snapshot.version = TELEMETRY_VERSION; // Set to 0x01
-    // Clear the reserved bytes (set to 0) for future use or alignment
+    snapshot.version = TELEMETRY_VERSION;
     memset(snapshot.reserved, 0, sizeof(snapshot.reserved));
-    // Copy the global telemetry data into the snapshot
     snapshot.telemetry = telemetry;
-    // Calculate CRC-16 over the snapshot (excluding the CRC field itself)
     snapshot.crc = CalculateCRC16((uint8_t*)&snapshot, sizeof(snapshot) - sizeof(uint16_t));
-    // Set padding to 0xFFFF to ensure 64-bit alignment
     snapshot.padding = 0xFFFF;
 
-    // Erase the flash page to prepare for writing
-    if (Flash_ErasePage() != HAL_OK) {
-        // Log an error if the erase fails
-        Log_Error("Failed to erase Flash page for telemetry");
-        // Exit the function to avoid writing to an unprepared page
-        return;
-    }
-
-    // Pointer to the snapshot as raw bytes for writing
-    uint8_t *raw = (uint8_t*)&snapshot;
-    // Start writing at the beginning of the flash page
-    uint32_t address = FLASH_USER_START_ADDR;
-
-    // Loop through the snapshot, writing 8 bytes at a time
-    for (uint32_t i = 0; i < sizeof(snapshot); i += 8) {
-        // Read 8 bytes from the snapshot into a 64-bit value
-        uint64_t data = *(uint64_t*)&raw[i];
-        // Write the 8 bytes to flash
-        if (Flash_WriteDoubleWord(address, data) != HAL_OK) {
-            // Log an error if the write fails
-            Log_Error("Flash write failed at 0x%08lX", address);
-            // Exit to avoid partial writes
+    // Check if the flash page is full
+    if ((current_flash_addr + SNAPSHOT_SIZE) > FLASH_USER_END_ADDR) {
+        Log_Message(BMS_MSG_LEVEL_INFO, "Flash full. Erasing and wrapping.");
+        if (Flash_ErasePage() != HAL_OK) {
+            Log_Message(BMS_MSG_LEVEL_ERROR, "Flash erase failed");
             return;
         }
-        // Move to the next 8-byte address
-        address += 8;
+        current_flash_addr = FLASH_USER_START_ADDR;
     }
+
+    uint8_t *raw = (uint8_t*)&snapshot;
+    for (uint32_t i = 0; i < SNAPSHOT_SIZE; i += 8) {
+        uint64_t data = *(uint64_t*)&raw[i];
+        if (Flash_WriteDoubleWord(current_flash_addr + i, data) != HAL_OK) {
+            Log_Message(BMS_MSG_LEVEL_ERROR, "Write failed at 0x%08lX", current_flash_addr + i);
+            return;
+        }
+    }
+
+    current_flash_addr += SNAPSHOT_SIZE;
 }
+
 
 // Function: Flash_ReadTelemetry
 // Inputs:
@@ -204,7 +193,7 @@ void Flash_ReadTelemetry(void) {
     // Check if the stored CRC matches the calculated CRC
     if (snapshot.crc != expected_crc) {
         // Log an error if the CRC doesn’t match (data may be corrupted)
-        Log_Error("CRC16 mismatch: expected 0x%04X, found 0x%04X", expected_crc, snapshot.crc);
+    	Log_Message(BMS_MSG_LEVEL_ERROR,"CRC16 mismatch: expected 0x%04X, found 0x%04X", expected_crc, snapshot.crc);
         // Exit to avoid using corrupted data
         return;
     }
@@ -212,7 +201,7 @@ void Flash_ReadTelemetry(void) {
     // Check if the stored version matches the expected version
     if (snapshot.version != TELEMETRY_VERSION) {
         // Log an error if the version doesn’t match (incompatible data format)
-        Log_Error("Version mismatch: expected 0x%02X, found 0x%02X", TELEMETRY_VERSION, snapshot.version);
+    	Log_Message(BMS_MSG_LEVEL_ERROR,"Version mismatch: expected 0x%02X, found 0x%02X", TELEMETRY_VERSION, snapshot.version);
         // Exit to avoid using incompatible data
         return;
     }
@@ -220,3 +209,21 @@ void Flash_ReadTelemetry(void) {
     // If CRC and version are valid, copy the snapshot’s telemetry to the global structure
     telemetry = snapshot.telemetry;
 }// only use functions used here, if you are taking telemetry from the flash memory, we use cr8 only
+
+
+void Flash_RecoverWritePointer(void) {
+    uint32_t addr = FLASH_USER_START_ADDR;
+    TelemetrySnapshot snapshot;
+
+    while (addr + SNAPSHOT_SIZE <= FLASH_USER_END_ADDR) {
+        memcpy(&snapshot, (void*)addr, SNAPSHOT_SIZE);
+
+        uint16_t expected_crc = CalculateCRC16((uint8_t*)&snapshot, sizeof(snapshot) - sizeof(uint16_t));
+        if (snapshot.version != TELEMETRY_VERSION || snapshot.crc != expected_crc) {
+            break; // corrupted or empty slot → stop scanning
+        }
+        addr += SNAPSHOT_SIZE;
+    }
+
+    current_flash_addr = addr; // set to next free slot
+}
