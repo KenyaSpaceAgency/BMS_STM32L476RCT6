@@ -62,7 +62,7 @@ main-build: BMS_STM32L476RCT6.elf secondary-outputs
 
 # Tool invocations
 BMS_STM32L476RCT6.elf BMS_STM32L476RCT6.map: $(OBJS) $(USER_OBJS) C:\Users\yomue\Desktop\AFDEVSAT1\BMS_STM32L476RCT6\STM32L476RCTX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
-	arm-none-eabi-gcc -o "BMS_STM32L476RCT6.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m4 -T"C:\Users\yomue\Desktop\AFDEVSAT1\BMS_STM32L476RCT6\STM32L476RCTX_FLASH.ld" --specs=nosys.specs -Wl,-Map="BMS_STM32L476RCT6.map" -Wl,--gc-sections -static --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -u _printf_float -u _scanf_float -Wl,--start-group -lc -lm -Wl,--end-group
+	arm-none-eabi-gcc -o "BMS_STM32L476RCT6.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m4 -T"C:\Users\yomue\Desktop\AFDEVSAT1\BMS_STM32L476RCT6\STM32L476RCTX_FLASH.ld" --specs=nosys.specs -Wl,-Map="BMS_STM32L476RCT6.map" -Wl,--gc-sections -static --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
 	@echo 'Finished building target: $@'
 	@echo ' '
 

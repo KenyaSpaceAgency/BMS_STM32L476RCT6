@@ -116,10 +116,11 @@ int main(void) {
             BMS_Service_HandleLowPowerCondition(&low_power_mode);
             // Save telemetry to flash if needed
             BMS_Service_HandleFlashStorage();
-            Log_Telemetry(BMS_MSG_LEVEL_DEBUG, &telemetry); // Log telemetry data for debugging
+
 
 
         }
+        Log_Telemetry(BMS_MSG_LEVEL_DEBUG, &telemetry); // Log telemetry data for debugging
 
         // If in low-power mode, try to wake BQ76920 chips
         if (low_power_mode) {

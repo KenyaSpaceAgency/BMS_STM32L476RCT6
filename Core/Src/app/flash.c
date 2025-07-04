@@ -227,3 +227,5 @@ void Flash_RecoverWritePointer(void) {
 
     current_flash_addr = addr; // set to next free slot
 }
+
+
