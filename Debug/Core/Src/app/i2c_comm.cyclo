@@ -1,0 +1,4 @@
+../Core/Src/app/i2c_comm.c:23:9:EPS_I2C_CRC8	4
+../Core/Src/app/i2c_comm.c:35:6:UpdateSyncCounterFromBytes	2
+../Core/Src/app/i2c_comm.c:43:6:I2C_Comm_Init	2
+../Core/Src/app/i2c_comm.c:51:6:HAL_I2C_SlaveRxCpltCallback	20

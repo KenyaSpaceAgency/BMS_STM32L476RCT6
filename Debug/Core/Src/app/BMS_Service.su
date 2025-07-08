@@ -1,0 +1,12 @@
+../Core/Src/app/BMS_Service.c:45:6:BMS_CheckSanity	192	static
+../Core/Src/app/BMS_Service.c:70:7:Read_PCB_Temperature	40	static
+../Core/Src/app/BMS_Service.c:105:6:Enter_SHIP_Mode	24	static
+../Core/Src/app/BMS_Service.c:121:6:BMS_Service_Init	8	static
+../Core/Src/app/BMS_Service.c:168:6:BQ76920_WakeAndConfigure	24	static
+../Core/Src/app/BMS_Service.c:205:6:BMS_Service_HandleAlerts	48	static
+../Core/Src/app/BMS_Service.c:310:6:BMS_Service_ReadMeasurements	64	static
+../Core/Src/app/BMS_Service.c:360:6:BMS_Service_ProcessData	64	static
+../Core/Src/app/BMS_Service.c:421:6:BMS_Service_UpdateCounters	24	static
+../Core/Src/app/BMS_Service.c:462:6:BMS_Service_HandleLowPowerCondition	24	static
+../Core/Src/app/BMS_Service.c:494:6:BMS_Service_HandleLowPowerMode	16	static
+../Core/Src/app/BMS_Service.c:535:6:BMS_Service_HandleFlashStorage	16	static

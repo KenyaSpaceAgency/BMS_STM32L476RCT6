@@ -1,0 +1,7 @@
+../Core/Src/app/flash.c:32:10:CalculateCRC16	4
+../Core/Src/app/flash.c:59:19:Flash_WriteDoubleWord	4
+../Core/Src/app/flash.c:88:10:Flash_ReadDoubleWord	3
+../Core/Src/app/flash.c:108:19:Flash_ErasePage	2
+../Core/Src/app/flash.c:147:6:Flash_WriteTelemetry	5
+../Core/Src/app/flash.c:187:6:Flash_ReadTelemetry	3
+../Core/Src/app/flash.c:216:6:Flash_RecoverWritePointer	4
