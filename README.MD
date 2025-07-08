@@ -6,7 +6,7 @@ Overview
 
 This project implements a Battery Management System (BMS) for CubeSat platforms using the **TI BQ76920** battery monitor IC. It supports a **4S2P lithium-ion battery pack** and is developed for **STM32L4 series microcontrollers**, with FreeRTOS support. The system emphasizes **robust telemetry, fault detection, heater control, and charge/discharge safety** for spacecraft power subsystems.![STM32L476RCT6_BMS flowchart](/images/flowchart.png)
 ### Hardware Reference
-- **Microcontroller**: STM32L476RCT6
+- **Microcontroller**: STM32L476RCT6.
 - **Battery Monitor ICs**: 2x BQ76920 (I2C1 and I2C2 for redundancy)
 - **Temperature Sensors**: 2x TMP100 (I2C1 address 0x48 for NTC-1, I2C2 address 0x49 for NTC-2)
 - **Heater Control**: 2x TPS22810 load switches (controlled via GPIO PB9 for Heater 1, PB8 for Heater 2)
