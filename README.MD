@@ -14,6 +14,7 @@ This project implements a Battery Management System (BMS) for CubeSat platforms 
 - **Reference Image**:  
 
   ![STM32L476RCT6 pinout](/images/STM32L476RCT6.png)
+  ![flowchart](/images/flowchart.png)
 
 ---
 
@@ -201,7 +202,7 @@ The clock configuration is critical for ensuring the MCU operates at the correct
         
     *   **Justification**:
         
-        *   The 8 MHz frequency aligns with the typical external crystal used in STM32 designs and assumed in the schematic (EPS\_BMS1.pdf).
+        *   The 8 MHz frequency aligns with the typical external crystal used in STM32 designs (EPS\_BMS1.pdf).
             
         *   This frequency ensures sufficient performance for the BMS tasks (e.g., RS485 communication, I2C, ADC sampling) while keeping power consumption low, which is critical for a CubeSat application (ICD Section 3, Power Budget, pages 22-51).
             
@@ -361,7 +362,7 @@ The BMS uses I2C to communicate with BQ76920 ICs and TMP100 temperature sensors 
         
         *   The ICD does not specify I2C speed, but 400 kHz is a standard choice for BQ76920 ICs (as per BQ76920 datasheet, supports up to 400 kHz) and TMP100 sensors (TMP100 datasheet, max 400 kHz).
             
-        *   main.c uses I2C1 (hi2c1) to interface with BQ76920 IC1 (address 0x08, assumed) and TMP100 NTC-1 (address 0x48, ICD page 89), as seen in BQ76920\_ReadVoltages and Temperature\_Read calls (page 43).
+        *   main.c uses I2C1 (hi2c1) to interface with BQ76920 IC1 (address 0x08) and TMP100 NTC-1 (address 0x48, ICD page 89), as seen in BQ76920\_ReadVoltages and Temperature\_Read calls (page 43).
             
         *   The schematic (EPS\_BMS1.pdf) does not explicitly show I2C connections, but PB6 and PB7 are standard I2C1 pins on the STM32L476RCT6, matching main.h definitions (page 13).
             
@@ -387,7 +388,7 @@ The BMS uses I2C to communicate with BQ76920 ICs and TMP100 temperature sensors 
             
     *   **Justification**:
         
-        *   I2C2 is used for redundancy with BQ76920 IC2 (address 0x09, assumed) and TMP100 NTC-2 (address 0x49, ICD page 89), as per main.c (BQ76920\_ReadVoltages and Temperature\_Read, page 43).
+        *   I2C2 is used for redundancy with BQ76920 IC2 (address 0x09) and TMP100 NTC-2 (address 0x49, ICD page 89), as per main.c (BQ76920\_ReadVoltages and Temperature\_Read, page 43).
             
         *   The schematic (EPS\_BMS1.pdf) does not specify I2C2 pins, so PB10 and PB11 are chosen as they are default I2C2 pins on the STM32L476RCT6 and available (not conflicting with other peripherals in main.h).
             
@@ -436,7 +437,7 @@ GPIO pins are configured for status indication, BQ76920 control, RS485 driver en
         
         *   Used for status indication (blinking for 5 seconds at startup, main.c page 43).
             
-        *   Defined in main.h as LED\_Pin (page 13), matching the schematic (EPS\_BMS1.pdf, not explicitly shown but assumed as DS3).
+        *   Defined in main.h as LED\_Pin (page 13), matching the schematic (EPS\_BMS1.pdf, not explicitly shown but as DS3).
             
         *   Set as push-pull output with no pull-up/pull-down (GPIO\_NOPULL) and low speed (GPIO\_SPEED\_FREQ\_LOW) to minimize power consumption (ICD power budget, page 24).
             
@@ -458,7 +459,7 @@ GPIO pins are configured for status indication, BQ76920 control, RS485 driver en
         
         *   Defined in main.h (page 13) but unused in the current firmware (main.c does not reference it).
             
-        *   Originally assumed to control a power line, but clarified as unused for heaters (now controlled by PB8, PB9). Configured as input for potential future use (e.g., BQ76920 IC2 boot control).
+        *   Configured as input for potential future use (e.g., BQ76920 IC2 boot control).
             
 *   **PA12 (ALERT2 from BQ76920 IC2)**:
     
@@ -468,7 +469,7 @@ GPIO pins are configured for status indication, BQ76920 control, RS485 driver en
         
         *   Connected to the ALERT pin of BQ76920 IC2 for fault detection (main.c, BQ76920\_CheckStatus, page 43).
             
-        *   Matches main.h definition (ALERT2\_Pin, page 13) and schematic (assumed, as EPS\_BMS1.pdf does not show specific connections).
+        *   Matches main.h definition (ALERT2\_Pin, page 13) and schematic ( as EPS\_BMS1.pdf does not show specific connections).
             
 *   **PB4 (BOOT for BQ76920 IC1)**:
     
@@ -486,7 +487,7 @@ GPIO pins are configured for status indication, BQ76920 control, RS485 driver en
         
         *   Connected to the ALERT pin of BQ76920 IC1 for fault detection (main.c, BQ76920\_CheckStatus, page 43).
             
-        *   Matches main.h definition (ALERT\_Pin, page 13) and schematic (assumed).
+        *   Matches main.h definition (ALERT\_Pin, page 13) and schematic .
             
 *   **PB8 (Heater 2 Control)**:
     
@@ -742,11 +743,11 @@ After completing the steps above, verify the following in STM32CubeIDE:
 - **pid.c/h**: PID controller for heater management, now includes TPS22810 load switch control (previously in `power_switch.c/h`).
 - **kalman_filter.c/h**: Kalman filter implementation for SOC and SOH estimation.
 - **ssp.c/h**: Simple Serial Protocol (SSP) for RS485 communication with the OBC.
-- **crc16.c/h**: CRC16 implementation for firmware update validation (assumed, as `CalculateCRC16` is referenced).
+- **crc16.c/h**: CRC16 implementation for firmware update validation ( as `CalculateCRC16` is referenced).
 
 
 ### Main Loop Operations
-The main loop in `main.c` runs every `LOOP_TIME` (assumed 0.1s, defined in `main.h`) and performs:
+The main loop in `main.c` runs every `LOOP_TIME` (0.1s, defined in `main.h`) and performs:
 1. Read BQ76920 data (cell voltages, pack currents) from both ICs.
 2. Read battery temperatures (NTC-1, NTC-2) and PCB temperature (internal sensor).
 3. Check redundancy between BQ76920 ICs and detect faults (e.g., overvoltage, overcurrent).
@@ -840,7 +841,7 @@ The firmware controls two heaters to maintain battery temperature within a safe 
 
 ### Implementation
 - **Interface**: RS485 via USART2 (PA2, PA3, PA1 as DE pin).
-- **Protocol**: SSP with custom command `SSP_CMD_FIRMWARE_UPDATE` (assumed 0x40).
+- **Protocol**: SSP with custom command `SSP_CMD_FIRMWARE_UPDATE` ( 0x40).
 - **Process**:
   1. `Bootloader_Check` reads flag at `FIRMWARE_UPDATE_FLAG_ADDR` (0x0807F810).
   2. If set (0xDEADBEEF), `Bootloader_FirmwareUpdate` erases app region and receives new firmware.
