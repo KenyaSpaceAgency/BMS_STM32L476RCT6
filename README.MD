@@ -1,9 +1,10 @@
-# BMS Project Documentation
+CubeSat Battery Management System (BMS) – STM32 + BQ76920
+=========================================================
 
-## Project Overview
+Overview
+--------
 
-This project implements a Battery Management System (BMS) for a CubeSat using the **STM32L476RCT6** microcontroller, configured via **STM32CubeIDE**. It manages a 4S2P lithium-ion battery pack (4 cells in series, 2 in parallel per group) using two **BQ76920** battery monitor ICs for redundancy. The firmware ensures safe operation, efficient power management, and reliable communication with the On-Board Computer (OBC) via the Simple Serial Protocol (SSP) over RS485. Key features include battery monitoring, protection, temperature control, and firmware updates.
-![STM32L476RCT6_BMS flowchart](/images/flowchart.png)
+This project implements a Battery Management System (BMS) for CubeSat platforms using the **TI BQ76920** battery monitor IC. It supports a **4S2P lithium-ion battery pack** and is developed for **STM32L4 series microcontrollers**, with FreeRTOS support. The system emphasizes **robust telemetry, fault detection, heater control, and charge/discharge safety** for spacecraft power subsystems.![STM32L476RCT6_BMS flowchart](/images/flowchart.png)
 ### Hardware Reference
 - **Microcontroller**: STM32L476RCT6
 - **Battery Monitor ICs**: 2x BQ76920 (I2C1 and I2C2 for redundancy)
@@ -58,9 +59,74 @@ This project implements a Battery Management System (BMS) for a CubeSat using th
 - [✓] **Protective Actions**: Fault-specific actions added in `Update_BMS_Mode`.
 - [✓] **Fault Recovery**: Recovery mechanisms implemented with timeouts and reset logic.
 - [✓] **Battery Pack Configuration**: Configurable parameters defined in `BatteryConfig` struct.
-- [✓] **Firmware Updates**: Fully implemented via RS485 with bootloader and CRC16 validation.
 - [✓] **Heater Control Update**: Replaced PWM control with direct GPIO on/off control via TPS22810 switches.
-- [✓] **Code Consolidation**: Merged `power_switch.c` and `power_switch.h` into `pid.c` and `pid.h`.
+
+BQ76920.c – Battery Monitor Driver
+----------------------------------
+
+This module provides a complete driver for the TI BQ76920 IC.
+
+### Major Functionalities
+
+*   Initialization:
+    
+    *   Configures the IC, reads ADC gain/offset values
+        
+*   Measurement:
+    
+    *   Reads:
+        
+        *   Cell voltages (VC1–VC4)
+            
+        *   Pack current
+            
+        *   Thermistor temperature (external)
+            
+        *   Internal die temperature
+            
+*   Safety:
+    
+    *   Checks for over/undervoltage, overcurrent, short circuit
+        
+    *   Enables/disables CHG/DSG FETs accordingly
+        
+*   SOC/SOH Estimation:
+    
+    *   Uses extended Kalman filter for:
+        
+        *   State-of-Charge (SOC)
+            
+        *   State-of-Health (SOH)
+            
+        *   Energy and capacity usage
+            
+*   Alert Handling:
+    
+    *   Detects faults via ALERT pin
+        
+    *   Exits SHIP mode on boot trigger
+        
+*   Utility:
+    
+    *   Performs sanity checks, balance control, and low-power shutdown
+
+
+
+Communication
+-------------
+
+*   **I2C3 Slave Interface**: handles commands such as:
+    
+    *   CMD\_ENABLE\_HEATER\_1
+        
+    *   CMD\_READ\_TELEMETRY
+        
+    *   CMD\_ENABLE\_CHARGING
+        
+*   **USART2 RS-485**: AFDEVSAT SSP protocol
+    
+*   **USART1**: debug output via Log\_Message()
+
 
 ---
 

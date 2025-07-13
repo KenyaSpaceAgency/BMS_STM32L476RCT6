@@ -1,18 +1,147 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="SELECTIVE" />
+  </component>
+  <component name="CMakeSettings">
+    <configurations>
+      <configuration PROFILE_NAME="Debug" ENABLED="true" CONFIG_NAME="Debug" />
+    </configurations>
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="23425a51-b1c3-4346-ac5d-877804eeedc0" name="Changes" comment="">
+      <change beforePath="$PROJECT_DIR$/../../.cproject" beforeDir="false" afterPath="$PROJECT_DIR$/../../.cproject" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../.mxproject" beforeDir="false" afterPath="$PROJECT_DIR$/../../.mxproject" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../.project" beforeDir="false" afterPath="$PROJECT_DIR$/../../.project" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../BMS_STM32L476RCT6.ioc" beforeDir="false" afterPath="$PROJECT_DIR$/../../BMS_STM32L476RCT6RTOS2.ioc" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/BMS_Service.h" beforeDir="false" afterPath="$PROJECT_DIR$/BMS_Service.h" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/BQ76920.h" beforeDir="false" afterPath="$PROJECT_DIR$/BQ76920.h" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/main.h" beforeDir="false" afterPath="$PROJECT_DIR$/main.h" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/stm32l4xx_it.h" beforeDir="false" afterPath="$PROJECT_DIR$/stm32l4xx_it.h" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/temperature.h" beforeDir="false" afterPath="$PROJECT_DIR$/temperature.h" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../Src/app/BMS_Service.c" beforeDir="false" afterPath="$PROJECT_DIR$/../Src/app/BMS_Service.c" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../Src/app/BQ76920.c" beforeDir="false" afterPath="$PROJECT_DIR$/../Src/app/BQ76920.c" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../Src/app/Temperature.c" beforeDir="false" afterPath="$PROJECT_DIR$/../Src/app/Temperature.c" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../Src/app/i2c_comm.c" beforeDir="false" afterPath="$PROJECT_DIR$/../Src/app/i2c_comm.c" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../Src/main.c" beforeDir="false" afterPath="$PROJECT_DIR$/../Src/main.c" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../Src/stm32l4xx_hal_msp.c" beforeDir="false" afterPath="$PROJECT_DIR$/../Src/stm32l4xx_hal_msp.c" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../Src/stm32l4xx_it.c" beforeDir="false" afterPath="$PROJECT_DIR$/../Src/stm32l4xx_it.c" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../Debug/Core/Inc/subdir.mk" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../Debug/Core/Src/app/BMS_Service.cyclo" beforeDir="false" afterPath="$PROJECT_DIR$/../../Debug/Core/Src/app/BMS_Service.cyclo" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../Debug/Core/Src/app/BMS_Service.o" beforeDir="false" afterPath="$PROJECT_DIR$/../../Debug/Core/Src/app/BMS_Service.o" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../Debug/Core/Src/app/BMS_Service.su" beforeDir="false" afterPath="$PROJECT_DIR$/../../Debug/Core/Src/app/BMS_Service.su" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../Debug/Core/Src/app/BQ76920.cyclo" beforeDir="false" afterPath="$PROJECT_DIR$/../../Debug/Core/Src/app/BQ76920.cyclo" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../Debug/Core/Src/app/BQ76920.o" beforeDir="false" afterPath="$PROJECT_DIR$/../../Debug/Core/Src/app/BQ76920.o" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../Debug/Core/Src/app/BQ76920.su" beforeDir="false" afterPath="$PROJECT_DIR$/../../Debug/Core/Src/app/BQ76920.su" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../Debug/Core/Src/app/Log.o" beforeDir="false" afterPath="$PROJECT_DIR$/../../Debug/Core/Src/app/Log.o" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../Debug/Core/Src/app/Temperature.cyclo" beforeDir="false" afterPath="$PROJECT_DIR$/../../Debug/Core/Src/app/Temperature.cyclo" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../Debug/Core/Src/app/Temperature.o" beforeDir="false" afterPath="$PROJECT_DIR$/../../Debug/Core/Src/app/Temperature.o" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../Debug/Core/Src/app/Temperature.su" beforeDir="false" afterPath="$PROJECT_DIR$/../../Debug/Core/Src/app/Temperature.su" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../Debug/Core/Src/app/flash.o" beforeDir="false" afterPath="$PROJECT_DIR$/../../Debug/Core/Src/app/flash.o" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../Debug/Core/Src/app/i2c_comm.o" beforeDir="false" afterPath="$PROJECT_DIR$/../../Debug/Core/Src/app/i2c_comm.o" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../Debug/Core/Src/app/kalman_filter.o" beforeDir="false" afterPath="$PROJECT_DIR$/../../Debug/Core/Src/app/kalman_filter.o" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../Debug/Core/Src/app/subdir.mk" beforeDir="false" afterPath="$PROJECT_DIR$/../../Debug/Core/Src/app/subdir.mk" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../Debug/Core/Src/main.cyclo" beforeDir="false" afterPath="$PROJECT_DIR$/../../Debug/Core/Src/main.cyclo" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../Debug/Core/Src/main.d" beforeDir="false" afterPath="$PROJECT_DIR$/../../Debug/Core/Src/main.d" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../Debug/Core/Src/main.o" beforeDir="false" afterPath="$PROJECT_DIR$/../../Debug/Core/Src/main.o" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../Debug/Core/Src/main.su" beforeDir="false" afterPath="$PROJECT_DIR$/../../Debug/Core/Src/main.su" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../Debug/Core/Src/stm32l4xx_hal_msp.cyclo" beforeDir="false" afterPath="$PROJECT_DIR$/../../Debug/Core/Src/stm32l4xx_hal_msp.cyclo" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../Debug/Core/Src/stm32l4xx_hal_msp.o" beforeDir="false" afterPath="$PROJECT_DIR$/../../Debug/Core/Src/stm32l4xx_hal_msp.o" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../Debug/Core/Src/stm32l4xx_hal_msp.su" beforeDir="false" afterPath="$PROJECT_DIR$/../../Debug/Core/Src/stm32l4xx_hal_msp.su" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../Debug/Core/Src/stm32l4xx_it.cyclo" beforeDir="false" afterPath="$PROJECT_DIR$/../../Debug/Core/Src/stm32l4xx_it.cyclo" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../Debug/Core/Src/stm32l4xx_it.d" beforeDir="false" afterPath="$PROJECT_DIR$/../../Debug/Core/Src/stm32l4xx_it.d" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../Debug/Core/Src/stm32l4xx_it.o" beforeDir="false" afterPath="$PROJECT_DIR$/../../Debug/Core/Src/stm32l4xx_it.o" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../Debug/Core/Src/stm32l4xx_it.su" beforeDir="false" afterPath="$PROJECT_DIR$/../../Debug/Core/Src/stm32l4xx_it.su" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../Debug/Core/Src/subdir.mk" beforeDir="false" afterPath="$PROJECT_DIR$/../../Debug/Core/Src/subdir.mk" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../Debug/Core/Src/syscalls.o" beforeDir="false" afterPath="$PROJECT_DIR$/../../Debug/Core/Src/syscalls.o" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../Debug/Core/Src/sysmem.o" beforeDir="false" afterPath="$PROJECT_DIR$/../../Debug/Core/Src/sysmem.o" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../Debug/Core/Src/system_stm32l4xx.o" beforeDir="false" afterPath="$PROJECT_DIR$/../../Debug/Core/Src/system_stm32l4xx.o" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../Debug/Core/Startup/startup_stm32l476rctx.o" beforeDir="false" afterPath="$PROJECT_DIR$/../../Debug/Core/Startup/startup_stm32l476rctx.o" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../Debug/Core/Startup/subdir.mk" beforeDir="false" afterPath="$PROJECT_DIR$/../../Debug/Core/Startup/subdir.mk" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../Debug/Drivers/STM32L4xx_HAL_Driver/Src/stm32l4xx_hal.o" beforeDir="false" afterPath="$PROJECT_DIR$/../../Debug/Drivers/STM32L4xx_HAL_Driver/Src/stm32l4xx_hal.o" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../Debug/Drivers/STM32L4xx_HAL_Driver/Src/stm32l4xx_hal_adc.o" beforeDir="false" afterPath="$PROJECT_DIR$/../../Debug/Drivers/STM32L4xx_HAL_Driver/Src/stm32l4xx_hal_adc.o" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../Debug/Drivers/STM32L4xx_HAL_Driver/Src/stm32l4xx_hal_adc_ex.o" beforeDir="false" afterPath="$PROJECT_DIR$/../../Debug/Drivers/STM32L4xx_HAL_Driver/Src/stm32l4xx_hal_adc_ex.o" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../Debug/Drivers/STM32L4xx_HAL_Driver/Src/stm32l4xx_hal_cortex.o" beforeDir="false" afterPath="$PROJECT_DIR$/../../Debug/Drivers/STM32L4xx_HAL_Driver/Src/stm32l4xx_hal_cortex.o" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../Debug/Drivers/STM32L4xx_HAL_Driver/Src/stm32l4xx_hal_dma.o" beforeDir="false" afterPath="$PROJECT_DIR$/../../Debug/Drivers/STM32L4xx_HAL_Driver/Src/stm32l4xx_hal_dma.o" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../Debug/Drivers/STM32L4xx_HAL_Driver/Src/stm32l4xx_hal_dma_ex.o" beforeDir="false" afterPath="$PROJECT_DIR$/../../Debug/Drivers/STM32L4xx_HAL_Driver/Src/stm32l4xx_hal_dma_ex.o" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../Debug/Drivers/STM32L4xx_HAL_Driver/Src/stm32l4xx_hal_exti.o" beforeDir="false" afterPath="$PROJECT_DIR$/../../Debug/Drivers/STM32L4xx_HAL_Driver/Src/stm32l4xx_hal_exti.o" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../Debug/Drivers/STM32L4xx_HAL_Driver/Src/stm32l4xx_hal_flash.o" beforeDir="false" afterPath="$PROJECT_DIR$/../../Debug/Drivers/STM32L4xx_HAL_Driver/Src/stm32l4xx_hal_flash.o" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../Debug/Drivers/STM32L4xx_HAL_Driver/Src/stm32l4xx_hal_flash_ex.o" beforeDir="false" afterPath="$PROJECT_DIR$/../../Debug/Drivers/STM32L4xx_HAL_Driver/Src/stm32l4xx_hal_flash_ex.o" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../Debug/Drivers/STM32L4xx_HAL_Driver/Src/stm32l4xx_hal_flash_ramfunc.o" beforeDir="false" afterPath="$PROJECT_DIR$/../../Debug/Drivers/STM32L4xx_HAL_Driver/Src/stm32l4xx_hal_flash_ramfunc.o" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../Debug/Drivers/STM32L4xx_HAL_Driver/Src/stm32l4xx_hal_gpio.o" beforeDir="false" afterPath="$PROJECT_DIR$/../../Debug/Drivers/STM32L4xx_HAL_Driver/Src/stm32l4xx_hal_gpio.o" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../Debug/Drivers/STM32L4xx_HAL_Driver/Src/stm32l4xx_hal_i2c.o" beforeDir="false" afterPath="$PROJECT_DIR$/../../Debug/Drivers/STM32L4xx_HAL_Driver/Src/stm32l4xx_hal_i2c.o" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../Debug/Drivers/STM32L4xx_HAL_Driver/Src/stm32l4xx_hal_i2c_ex.o" beforeDir="false" afterPath="$PROJECT_DIR$/../../Debug/Drivers/STM32L4xx_HAL_Driver/Src/stm32l4xx_hal_i2c_ex.o" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../Debug/Drivers/STM32L4xx_HAL_Driver/Src/stm32l4xx_hal_pwr.o" beforeDir="false" afterPath="$PROJECT_DIR$/../../Debug/Drivers/STM32L4xx_HAL_Driver/Src/stm32l4xx_hal_pwr.o" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../Debug/Drivers/STM32L4xx_HAL_Driver/Src/stm32l4xx_hal_pwr_ex.o" beforeDir="false" afterPath="$PROJECT_DIR$/../../Debug/Drivers/STM32L4xx_HAL_Driver/Src/stm32l4xx_hal_pwr_ex.o" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../Debug/Drivers/STM32L4xx_HAL_Driver/Src/stm32l4xx_hal_rcc.o" beforeDir="false" afterPath="$PROJECT_DIR$/../../Debug/Drivers/STM32L4xx_HAL_Driver/Src/stm32l4xx_hal_rcc.o" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../Debug/Drivers/STM32L4xx_HAL_Driver/Src/stm32l4xx_hal_rcc_ex.o" beforeDir="false" afterPath="$PROJECT_DIR$/../../Debug/Drivers/STM32L4xx_HAL_Driver/Src/stm32l4xx_hal_rcc_ex.o" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../Debug/Drivers/STM32L4xx_HAL_Driver/Src/stm32l4xx_hal_rtc.o" beforeDir="false" afterPath="$PROJECT_DIR$/../../Debug/Drivers/STM32L4xx_HAL_Driver/Src/stm32l4xx_hal_rtc.o" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../Debug/Drivers/STM32L4xx_HAL_Driver/Src/stm32l4xx_hal_rtc_ex.o" beforeDir="false" afterPath="$PROJECT_DIR$/../../Debug/Drivers/STM32L4xx_HAL_Driver/Src/stm32l4xx_hal_rtc_ex.o" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../Debug/Drivers/STM32L4xx_HAL_Driver/Src/stm32l4xx_hal_tim.o" beforeDir="false" afterPath="$PROJECT_DIR$/../../Debug/Drivers/STM32L4xx_HAL_Driver/Src/stm32l4xx_hal_tim.o" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../Debug/Drivers/STM32L4xx_HAL_Driver/Src/stm32l4xx_hal_tim_ex.o" beforeDir="false" afterPath="$PROJECT_DIR$/../../Debug/Drivers/STM32L4xx_HAL_Driver/Src/stm32l4xx_hal_tim_ex.o" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../Debug/Drivers/STM32L4xx_HAL_Driver/Src/stm32l4xx_hal_uart.o" beforeDir="false" afterPath="$PROJECT_DIR$/../../Debug/Drivers/STM32L4xx_HAL_Driver/Src/stm32l4xx_hal_uart.o" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../Debug/Drivers/STM32L4xx_HAL_Driver/Src/stm32l4xx_hal_uart_ex.o" beforeDir="false" afterPath="$PROJECT_DIR$/../../Debug/Drivers/STM32L4xx_HAL_Driver/Src/stm32l4xx_hal_uart_ex.o" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../Debug/Drivers/STM32L4xx_HAL_Driver/Src/subdir.mk" beforeDir="false" afterPath="$PROJECT_DIR$/../../Debug/Drivers/STM32L4xx_HAL_Driver/Src/subdir.mk" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../Debug/makefile" beforeDir="false" afterPath="$PROJECT_DIR$/../../Debug/makefile" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../Debug/objects.list" beforeDir="false" afterPath="$PROJECT_DIR$/../../Debug/objects.list" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../Debug/objects.mk" beforeDir="false" afterPath="$PROJECT_DIR$/../../Debug/objects.mk" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../Debug/sources.mk" beforeDir="false" afterPath="$PROJECT_DIR$/../../Debug/sources.mk" afterDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="ClangdSettings">
+    <option name="formatViaClangd" value="false" />
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$/../.." />
+  </component>
+  <component name="ProjectColorInfo">{
+  &quot;associatedIndex&quot;: 6
+}</component>
+  <component name="ProjectId" id="2zRchpVPjJrSxSAJaExhsnoqMD2" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
   <component name="PropertiesComponent">{
   &quot;keyToString&quot;: {
-    &quot;settings.editor.selected.configurable&quot;: &quot;preferences.keymap&quot;
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.cidr.known.project.marker&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.readMode.enableVisualFormatting&quot;: &quot;true&quot;,
+    &quot;cf.first.check.clang-format&quot;: &quot;false&quot;,
+    &quot;cidr.known.project.marker&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;main&quot;,
+    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
+    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
+    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
+    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
+    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;org.jetbrains.plugins.github.ui.GithubSettingsConfigurable&quot;,
+    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
   }
 }</component>
+  <component name="SpellCheckerSettings" RuntimeDictionaries="0" Folders="0" CustomDictionaries="0" DefaultDictionary="application-level" UseSingleDictionary="true" transferred="true" />
   <component name="TaskManager">
     <task active="true" id="Default" summary="Default task">
+      <changelist id="23425a51-b1c3-4346-ac5d-877804eeedc0" name="Changes" comment="" />
       <created>1744183935285</created>
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1744183935285</updated>
       <workItem from="1744183936412" duration="537000" />
+      <workItem from="1751697450835" duration="301000" />
+      <workItem from="1751871703669" duration="595000" />
+      <workItem from="1751872977436" duration="405000" />
+      <workItem from="1751874710267" duration="151000" />
+      <workItem from="1751875850238" duration="474000" />
     </task>
     <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
   </component>
 </project>

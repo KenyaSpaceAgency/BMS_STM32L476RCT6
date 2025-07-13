@@ -115,6 +115,7 @@ void TMP100_Configure(I2C_HandleTypeDef *hi2c, uint8_t address);
  * @param temp Current temperature reading
  */
 void PID_Init(void);  // Ensure this exists
+void PID_Control(float temp1, float temp2);
 
 void Log_Error(const char *format, ...);
 

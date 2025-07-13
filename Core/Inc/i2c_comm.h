@@ -38,6 +38,9 @@
 #define CMD_DISABLE_DISCHARGING 0xC4
 #define CMD_READ_TELEMETRY      0xD1
 #define CMD_READ_FLASHED_TELEMETRY  0xE1
+#define CMD_PUT_DATA                 0xF1  // PD – Put Data (block flash write)
+#define CMD_READ_DATA                0xF2  // RD – Read Data (read from flash)
+#define CMD_WRITE_DATA               0xF3  // WD – Write Data (direct write to flash)
 
 
 // External variables used across modules

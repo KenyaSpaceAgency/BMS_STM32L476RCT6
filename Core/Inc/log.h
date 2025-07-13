@@ -17,7 +17,8 @@ typedef enum {
     BMS_MSG_LEVEL_WARNING,
     BMS_MSG_LEVEL_INFO,
     BMS_MSG_LEVEL_VERBOSE,
-    BMS_MSG_LEVEL_DEBUG
+    BMS_MSG_LEVEL_DEBUG,
+	BMS_MSG_LEVEL_CRITICAL  // ✅ Critical messages that require immediate attention
 } BMS_LogLevel;
 
 void Log_Message(BMS_LogLevel level, const char *format, ...);

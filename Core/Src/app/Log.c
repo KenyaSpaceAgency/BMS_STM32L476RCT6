@@ -22,7 +22,8 @@ static const char *log_prefixes[] = {
     "[W] ",    // BMS_MSG_LEVEL_WARNING
     "[I] ",    // BMS_MSG_LEVEL_INFO
     "[V] ",    // BMS_MSG_LEVEL_VERBOSE
-    "[D] "     // BMS_MSG_LEVEL_DEBUG
+    "[D] ",     // BMS_MSG_LEVEL_DEBUG
+	"[C] "     // ✅ CRITICAL
 };
 
 void Log_Message(BMS_LogLevel level, const char *format, ...) {
@@ -36,6 +37,7 @@ void Log_Message(BMS_LogLevel level, const char *format, ...) {
     va_list args;
     va_start(args, format);
     vsnprintf(buffer + offset, LOG_BUFFER_SIZE - offset, format, args);
+    strncat(buffer, "\r\n", LOG_BUFFER_SIZE - strlen(buffer) - 1);
     va_end(args);
 
     size_t msg_len = strnlen(buffer, LOG_BUFFER_SIZE);

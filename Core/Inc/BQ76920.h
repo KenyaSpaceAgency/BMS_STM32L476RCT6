@@ -78,6 +78,11 @@
 #define MaxDischargeCurrent 10000
 #define ROUND_TRIP_EFFICIENCY 0.9f
 
+// BQ76920 gain/offset calibration registers (per datasheet Table 11)
+#define CC_GAIN1   0x50  // Current gain MSB
+#define CC_GAIN2   0x51  // Current gain LSB
+#define CC_OFFSET  0x52  // Current offset (signed)
+
 
 
 // Define simple macros to validate measurements. These help catch bad sensor reads early.
@@ -197,7 +202,7 @@ float getCurrent(BQ76920_t *BMS);
 float SOCPack(BQ76920_t *BMS, float PackCurrent, float Vpack);
 float SOHPack(BQ76920_t *BMS);
 void readAlert(BQ76920_t *BMS);
-void EnableBalanceCell(BQ76920_t *BMS, float PackCurrent);
+bool EnableBalanceCell(BQ76920_t *BMS, float PackCurrent);
 void turnCHGOn(BQ76920_t *BMS);
 void turnDSGOn(BQ76920_t *BMS);
 void turnCHGOff(BQ76920_t *BMS);
@@ -208,6 +213,10 @@ uint8_t checkUV(float Vcell[4]);
 uint8_t checkNotUV(float Vcell[4], uint8_t UV);
 uint8_t checkOV(float Vcell[4]);
 uint8_t checkNotOV(float Vcell[4], uint8_t OV);
+uint8_t checkOC(float PackCurrent);
+uint8_t checkNotOC(float PackCurrent, uint8_t OC);
+uint8_t checkSC(float PackCurrent);
+uint8_t checkNotSC(float PackCurrent, uint8_t SC);
 void justWrite1(BQ76920_t *BMS);
 uint8_t justRead1(BQ76920_t *BMS);
 uint8_t justRead2(BQ76920_t *BMS);
@@ -219,8 +228,9 @@ float justGetter5(BQ76920_t *BMS);
 float justGetter6(BQ76920_t *BMS);
 int32_t justGetter7(BQ76920_t *BMS);
 int32_t justGetter8(BQ76920_t *BMS);
-void BQ76920_ReadRegister(BQ76920_t *BMS, uint8_t reg, uint8_t *data, uint8_t *crc);
-void BQ76920_WriteRegister(BQ76920_t *BMS, uint8_t reg, uint8_t *data, uint8_t *crc);
+void BQ76920_ReadGainAndOffset(BQ76920_t *BMS);
+HAL_StatusTypeDef BQ76920_ReadRegister(BQ76920_t *BMS, uint8_t reg, uint8_t *data, uint8_t *crc);
+HAL_StatusTypeDef BQ76920_WriteRegister(BQ76920_t *BMS, uint8_t reg, uint8_t *data, uint8_t *crc);
 float BQ76920_GetTemperature(BQ76920_t *BMS, uint8_t temp_sel);
 float BQ76920_GetExternalThermistorTemperature(BQ76920_t *BMS, float beta, float R_nominal, float T_nominal);
 

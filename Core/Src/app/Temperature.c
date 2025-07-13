@@ -1,17 +1,17 @@
-void BMS_Service_EnableHeater1(void);
-void BMS_Service_DisableHeater1(void);
-void BMS_Service_EnableHeater2(void);
-void BMS_Service_DisableHeater2(void);  //dont use these functions, use these functions // Include header files needed for the code to work
+//File: Temperature.c
+
 #include "Temperature.h"     // Contains definitions for TMP100 addresses, heater pins, and function prototypes
 #include <math.h>            // Provides math functions like logf() (used in PID calculations)
 #include <stdio.h>           // Includes functions for printing (used in Log_Error for debugging)
 #include <stdlib.h>          // Includes utility functions like abs() (not used here but included for completeness)
+#include "delay.h"
 
 // External variables declared in other files (e.g., main.c)
 extern TelemetryData telemetry;         // Global structure to store battery data, including heater states
 extern I2C_HandleTypeDef hi2c1;         // I2C interface for TMP100 sensor 1 (pins PB6/PB7 on STM32L476)
 extern I2C_HandleTypeDef hi2c2;         // I2C interface for TMP100 sensor 2 (pins PB10/PB11, not used here)
-
+extern BQ76920_t bms_instance1;
+extern BQ76920_t bms_instance2;
 // Function: Temperature_Init
 // Inputs:
 //   - None (void)
@@ -39,29 +39,23 @@ void Temperature_Init(void) {
 //   - Reads the temperature from a TMP100 sensor over I2C, used to monitor battery pack temperature
 //     in BMS_Service.c. Returns absolute zero (-273.15°C) if communication fails (TMP100 datasheet, Section 7.5.1).
 float TMP100_ReadTemperature(I2C_HandleTypeDef *hi2c, uint8_t address) {
-    // Define the temperature register address (0x00 for TMP100, datasheet Section 7.5.1)
-    uint8_t temp_reg = 0x00;  // Address of the TMP100 temperature register
-    // Array to store two bytes of temperature data from the sensor
-    uint8_t data[2];          // Buffer to receive 2 bytes
+    uint8_t temp_reg = 0x00;
+    uint8_t data[2];
 
-    // Send the register address (0x00) to tell the TMP100 we want to read temperature
-    if (HAL_I2C_Master_Transmit(hi2c, address, &temp_reg, 1, HAL_MAX_DELAY) != HAL_OK)
-        // If I2C communication fails, return -273.15°C (absolute zero) to indicate an error
-        return -273.15f;  // Return absolute zero on error
-
-    // Read 2 bytes of temperature data from the TMP100
-    if (HAL_I2C_Master_Receive(hi2c, address, data, 2, HAL_MAX_DELAY) != HAL_OK)
-        // If reading fails, return -273.15°C to indicate an error
+    if (HAL_I2C_Master_Transmit(hi2c, address, &temp_reg, 1, HAL_MAX_DELAY) != HAL_OK) {
+        Log_Message(BMS_MSG_LEVEL_ERROR, "TMP100 TX failed (addr 0x%02X)", address);
         return -273.15f;
+    }
 
-    // Combine the two bytes into a 12-bit signed value (datasheet Section 7.5.1.2)
-    // Shift first byte left by 4 and combine with second byte’s upper 4 bits
+    if (HAL_I2C_Master_Receive(hi2c, address, data, 2, HAL_MAX_DELAY) != HAL_OK) {
+        Log_Message(BMS_MSG_LEVEL_ERROR, "TMP100 RX failed (addr 0x%02X)", address);
+        return -273.15f;
+    }
+
     int16_t raw_temp = ((int16_t)data[0] << 4) | (data[1] >> 4);
-    // If the temperature is negative (bit 11 is 1), sign-extend to 16 bits
-    if (raw_temp & 0x800) raw_temp |= 0xF000; // Sign-extend negative values
+    if (raw_temp & 0x800) raw_temp |= 0xF000;
 
-    // Convert raw value to Celsius (TMP100 resolution is 0.0625°C per bit, datasheet Section 7.5.1.2)
-    return raw_temp * 0.0625f; // Multiply by 0.0625 to get temperature in Celsius
+    return raw_temp * 0.0625f;
 }
 
 // Static variables for PID controller (accessible only in this file)
@@ -146,87 +140,103 @@ void PID_Init(void) {
     PowerSwitch_Init();  // Turn off both heaters
 }
 
-// Function: PID_Control
-// Inputs:
-//   - temp: An int16_t, the current temperature in Celsius (scaled, not float, to match input)
-// Output:
-//   - None (void), adjusts heater states to control temperature
-// Significance:
-//   - Implements a PID controller to turn heaters on or off based on the difference between
-//     the current temperature and a target (25°C), ensuring batteries stay at optimal temperature
-//     (used in BMS_Service.c).
-void PID_Control(float temp) {
-    // Check if temperature is invalid (outside -100°C to 150°C)
-    if (temp < -100 || temp > 150) {
-        // Log an error message if temperature is unrealistic
-    	Log_Message(BMS_MSG_LEVEL_ERROR,"PID: Skipping control, invalid temp: %d", temp);
-        // Exit the function to avoid using bad data
-        return;
+/**
+ * PID (Proportional-Integral-Derivative) Control function for temperature regulation.
+ *
+ * This function takes two temperature readings (temp1 and temp2) as input, validates them,
+ * and then applies PID control to adjust the heater state (on/off) to maintain a target temperature.
+ *
+ * @param temp1  First temperature reading
+ * @param temp2  Second temperature reading
+ */
+void PID_Control(float temp1, float temp2) {
+  // **Temperature Validation**
+  // Check if each temperature reading is within a valid range (-100.0f to 150.0f)
+  uint8_t temp1_valid = (temp1 >= -100.0f && temp1 <= 150.0f);
+  uint8_t temp2_valid = (temp2 >= -100.0f && temp2 <= 150.0f);
+
+  float temp; // variable to store the validated/averaged temperature
+
+  // **Error Handling: Both Sensors Invalid**
+  if (!temp1_valid && !temp2_valid) {
+    // Log an error message with both temperatures
+    Log_Message(BMS_MSG_LEVEL_ERROR, "PID: Both sensors invalid (T1: %.1f, T2: %.1f)", temp1, temp2);
+    // Disable heaters and reset PID variables
+    PowerSwitch_Control(HEATER_1, 0);
+    PowerSwitch_Control(HEATER_2, 0);
+    integral = 0.0f;
+    previous_error = 0.0f;
+    return; // exit the function
+  }
+
+  // **Temperature Selection**
+  else if (temp1_valid && temp2_valid) {
+    // Average both temperatures
+    temp = (temp1 + temp2) / 2.0f;
+    Log_Message(BMS_MSG_LEVEL_DEBUG, "PID: Using average temp (T1: %.1f, T2: %.1f, Avg: %.1f)", temp1, temp2, temp);
+  } else if (temp1_valid) {
+    // Use only temp1 if temp2 is invalid
+    temp = temp1;
+    Log_Message(BMS_MSG_LEVEL_WARNING, "PID: Using T1 only (T1: %.1f, T2 invalid: %.1f)", temp1, temp2);
+  } else {
+    // Use only temp2 if temp1 is invalid
+    temp = temp2;
+    Log_Message(BMS_MSG_LEVEL_WARNING, "PID: Using T2 only (T1 invalid: %.1f, T2: %.1f)", temp1, temp2);
+  }
+
+  // **Emergency Shutdown (Temperature Exceeded)**
+  if (temp >= TEMP_UPPER_LIMIT) {
+    // If heaters are currently enabled, shut them down and reset PID variables
+    if (heater_1_enabled || heater_2_enabled) {
+      PowerSwitch_Control(HEATER_1, 0);
+      PowerSwitch_Control(HEATER_2, 0);
+      integral = 0.0f;
+      previous_error = 0.0f;
+      Log_Message(BMS_MSG_LEVEL_ERROR, "PID: Emergency shutdown (T1: %.1f, T2: %.1f)", temp1, temp2);
     }
+    return; // exit the function
+  }
 
-    // Safety check: if temperature exceeds upper limit (60°C, defined in Temperature.h)
-    if (temp >= TEMP_UPPER_LIMIT) {
-        // If either heater is on
-        if (heater_1_enabled || heater_2_enabled) {
-            // Turn off Heater 1
-            PowerSwitch_Control(HEATER_1, 0);
-            // Turn off Heater 2
-            PowerSwitch_Control(HEATER_2, 0);
-            // Reset the integral term to prevent windup
-            integral = 0.0f;
-            // Reset the previous error
-            previous_error = 0.0f;
-            // Log an emergency shutdown message
-            Log_Message(BMS_MSG_LEVEL_ERROR,"PID: Emergency shutdown. Temp = %d°C", temp);
-        }
-        // Exit to prevent further processing
-        return;
-    }
+  // **PID Calculation**
+  // Calculate the error between the target temperature and the current temperature
+  float error = TARGET_TEMP - temp;
 
-    // Calculate the error: difference between target temperature (25°C) and current temperature
-    float error = TARGET_TEMP - temp;    // Proportional error term
-    // Add error times time step (DT=1.0s) to the integral term
-    integral += error * DT;              // Accumulate integral
+  // Update the integral term ( accumulate error over time )
+  integral += error * DT;
+  // Limit the integral term to prevent windup
+  if (integral > 100.0f) integral = 100.0f;
+  if (integral < -100.0f) integral = -100.0f;
 
-    // Prevent integral windup (integral getting too large)
-    // Clamp integral to ±100 to avoid runaway values
-    if (integral > 100.0f) integral = 100.0f;
-    if (integral < -100.0f) integral = -100.0f;
+  // Calculate the derivative term ( rate of change of error )
+  float derivative = (error - previous_error) / DT;
 
-    // Calculate derivative term: change in error over time
-    float derivative = (error - previous_error) / DT;  // Change in error
-    // Calculate PID output using proportional, integral, and derivative terms
-    // KP, KI, KD are tuning constants from Temperature.h
-    float output = KP * error + KI * integral + KD * derivative; // PID formula
+  // Calculate the PID output ( weighted sum of P, I, and D terms )
+  float output = KP * error + KI * integral + KD * derivative;
 
-    // Decide whether to turn heaters on or off
-    uint8_t new_heater_state = 0;
-    // If output is positive and temperature is cold (<15°C), turn heaters on
-    if (output > 0 && temp < 15) {
-        new_heater_state = 1; // Force ON if very cold
-    // If output is zero or negative, or temperature is hot (>35°C), turn heaters off
-    } else if (output <= 0 || temp > 35) {
-        new_heater_state = 0; // Turn OFF if hot or unneeded
+  // **Heater State Determination**
+  uint8_t new_heater_state = 0;
+  if (output > 0 && temp < 15.0f) {
+    // Enable heaters if output is positive and temperature is below 15°C
+    new_heater_state = 1;
+  } else if (output <= 0 || temp > 35.0f) {
+    // Disable heaters if output is non-positive or temperature exceeds 35°C
+    new_heater_state = 0;
+  } else {
     // Otherwise, maintain the current heater state
-    } else {
-        new_heater_state = heater_1_enabled; // Maintain previous state
-    }
+    new_heater_state = heater_1_enabled;
+  }
 
-    // If the new state differs from the current state for either heater
-    if (new_heater_state != heater_1_enabled || new_heater_state != heater_2_enabled) {
-        // Update Heater 1 to the new state
-        PowerSwitch_Control(HEATER_1, new_heater_state);
-        // Update Heater 2 to the new state
-        PowerSwitch_Control(HEATER_2, new_heater_state);
-        // Log the heater state change, temperature, PID output, and error
-        Log_Message(BMS_MSG_LEVEL_ERROR,"PID: Heaters %s | Temp: %d°C | Out: %.2f | Err: %.2f",
-                  new_heater_state ? "ON" : "OFF", temp, output, error);
-    }
+  // **Apply New Heater State (if changed)**
+  if (new_heater_state != heater_1_enabled || new_heater_state != heater_2_enabled) {
+    PowerSwitch_Control(HEATER_1, new_heater_state);
+    PowerSwitch_Control(HEATER_2, new_heater_state);
+    Log_Message(BMS_MSG_LEVEL_INFO, "PID: Heaters %s | T1: %.1f, T2: %.1f | Out: %.2f | Err: %.2f",
+                new_heater_state ? "ON" : "OFF", temp1, temp2, output, error);
+  }
 
-    // Save current error for the next loop’s derivative calculation
-    previous_error = error;  // Save error for next loop
+  // **Update Previous Error**
+  previous_error = error;
 }
-
 // Function: TMP100_Configure
 // Inputs:
 //   - hi2c: A pointer to an I2C_HandleTypeDef, the I2C interface for communication
@@ -250,7 +260,7 @@ void TMP100_Configure(I2C_HandleTypeDef *hi2c, uint8_t address) {
     }
 
     // Wait 10ms to ensure the TMP100 applies the configuration
-    HAL_Delay(10); // Wait for settings to take effect
+    SoftwareDelay(10); // Wait for settings to take effect
 }
 
 // Function: Heater1_On

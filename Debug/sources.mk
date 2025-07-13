@@ -22,6 +22,10 @@ C_DEPS :=
 
 # Every subdirectory with source files must be described here
 SUBDIRS := \
+Core/Src/FreeRTOS/Source/CMSIS_RTOS_V2 \
+Core/Src/FreeRTOS/Source \
+Core/Src/FreeRTOS/Source/portable/GCC/ARM_CM4F \
+Core/Src/FreeRTOS/Source/portable/MemMang \
 Core/Src/app \
 Core/Src \
 Core/Startup \

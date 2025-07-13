@@ -1,2 +1,2 @@
-../Core/Src/app/Log.c:28:6:Log_Message	292	static
-../Core/Src/app/Log.c:54:6:Log_Telemetry	24	static
+../Core/Src/app/Log.c:29:6:Log_Message	292	static
+../Core/Src/app/Log.c:56:6:Log_Telemetry	24	static

@@ -12,6 +12,8 @@
 #include <math.h>             // Math functions like fminf, fmaxf, fabs for calculations
 #include <stdio.h>            // Printing functions for error logging (snprintf)
 #include <string.h>           // String functions like strlen for logging
+#include "delay.h"
+#include "log.h"           // For Log_Message()
 
 // External variables declared in main.c
 extern I2C_HandleTypeDef hi2c1;         // I2C1 interface (PB6/PB7) for BQ76920 and TMP100
@@ -42,19 +44,21 @@ static uint32_t low_power_timer = 0;    // Tracks time in low SOC state for SHIP
 //   - Checks if a measurement (e.g., voltage, current) is within safe limits, logging errors
 //     if not. Used to ensure reliable data for battery monitoring.
 void BMS_CheckSanity(const char *label, float value, float min, float max) {
-    // Check if the value is outside the allowed range
     if (value < min || value > max) {
-        // Create a buffer to hold the error message
         char msg[128];
-        // Format the error message with the label, value, and range
-        Log_Message(BMS_MSG_LEVEL_ERROR, "[SANITY FAIL] %s=%.2f out of range (%.2f - %.2f)\r\n",
-                label, value, min, max);
+
+        // Compose the error message once
         snprintf(msg, sizeof(msg), "[SANITY FAIL] %s=%.2f out of range (%.2f - %.2f)\r\n",
                  label, value, min, max);
-        // Send the error message over UART (huart1) for debugging
+
+        // Log it to the centralized logger
+        Log_Message(BMS_MSG_LEVEL_ERROR, "%s", msg);
+
+        // Also transmit over UART1
         HAL_UART_Transmit(&huart1, (uint8_t*)msg, strlen(msg), HAL_MAX_DELAY);
     }
 }
+
 
 // Function: Read_PCB_Temperature
 // Inputs:
@@ -65,24 +69,30 @@ void BMS_CheckSanity(const char *label, float value, float min, float max) {
 //   - Reads the STM32’s internal temperature sensor via ADC to monitor the PCB temperature,
 //     stored in telemetry.pcb_temperature for safety checks.
 float Read_PCB_Temperature(void) {
-    // Start the ADC to begin temperature measurement
     HAL_ADC_Start(&hadc1);
-    // Wait for the ADC conversion to complete (timeout if too long)
-    HAL_ADC_PollForConversion(&hadc1, HAL_MAX_DELAY);
-    // Get the raw ADC value (12-bit)
-    uint32_t adc_value = HAL_ADC_GetValue(&hadc1);
-    // Stop the ADC to free it for other uses
-    HAL_ADC_Stop(&hadc1); // Fixed: Added &hadc1
+    if (HAL_ADC_PollForConversion(&hadc1, HAL_MAX_DELAY) != HAL_OK) {
+        Log_Message(BMS_MSG_LEVEL_ERROR, "ADC poll for PCB temperature failed.");
+        return -273.15f;
+    }
 
-    // Read calibration values from STM32 memory (Reference Manual, Section 15.4.29, page 463)
-    uint32_t TS_CAL1 = *((uint16_t*)0x1FFF75A8); // Calibration value at 30°C
-    uint32_t TS_CAL2 = *((uint16_t*)0x1FFF75CA); // Calibration value at 110°C
-    // Check if calibration values are invalid (equal means no calibration)
-    if (TS_CAL2 == TS_CAL1) return -273.15f; // Return absolute zero for error
-    // Calculate temperature using linear interpolation
-    // Formula: temp = (TS_CAL2 - TS_CAL1)/(110 - 30) * (adc_value - TS_CAL1) + 30
-    float temp = ((float)(TS_CAL2 - TS_CAL1) / (110.0f - 30.0f)) * ((float)adc_value - TS_CAL1) + 30.0f;
-    return temp; // Return temperature in Celsius
+    uint32_t adc_value = HAL_ADC_GetValue(&hadc1);
+    HAL_ADC_Stop(&hadc1);
+
+    uint32_t TS_CAL1 = *((uint16_t*)0x1FFF75A8); // 30°C calibration
+    uint32_t TS_CAL2 = *((uint16_t*)0x1FFF75CA); // 110°C calibration
+
+    if (TS_CAL2 == TS_CAL1) {
+        Log_Message(BMS_MSG_LEVEL_ERROR, "Invalid STM32 temp sensor calibration data.");
+        return -273.15f;
+    }
+
+    float temp = ((float)(TS_CAL2 - TS_CAL1) / 80.0f) * ((float)adc_value - TS_CAL1) + 30.0f;
+
+    Log_Message(BMS_MSG_LEVEL_DEBUG,
+        "PCB Temperature: %.2f °C (ADC=0x%03lX, CAL1=%lu, CAL2=%lu)",
+        temp, adc_value, TS_CAL1, TS_CAL2);
+
+    return temp;
 }
 
 // Function: Enter_SHIP_Mode
@@ -110,30 +120,79 @@ void Enter_SHIP_Mode(BQ76920_t *BMS) {
 //   - Initializes the BQ76920 chips and loads saved telemetry from flash, called at startup
 //     in main.c to set up the BMS.
 void BMS_Service_Init(void) {
-    // Check if BQ76920 on I2C1 is responsive
+    // Step 1: Wake up both BQ76920 chips
+    Log_Message(BMS_MSG_LEVEL_INFO, "Waking up BMS ICs...");
+    HAL_GPIO_WritePin(BOOT_GPIO_Port, BOOT_Pin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(BOOT2_GPIO_Port, BOOT2_Pin, GPIO_PIN_RESET);
+    SoftwareDelay(2);
+    HAL_GPIO_WritePin(BOOT_GPIO_Port, BOOT_Pin, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(BOOT2_GPIO_Port, BOOT2_Pin, GPIO_PIN_SET);
+    SoftwareDelay(2);
+
+    // Step 2: Check I2C communication
+    Log_Message(BMS_MSG_LEVEL_INFO, "Checking I2C readiness for BMS ICs...");
     telemetry.i2c_comm_error_ic1 = (HAL_I2C_IsDeviceReady(&hi2c1, BQ76920_ADDRESS, 2, HAL_MAX_DELAY) != HAL_OK);
-    // Check if BQ76920 on I2C2 is responsive
     telemetry.i2c_comm_error_ic2 = (HAL_I2C_IsDeviceReady(&hi2c2, BQ76920_ADDRESS, 2, HAL_MAX_DELAY) != HAL_OK);
-    // Set BMS online if no I2C errors
     telemetry.bms_online = !(telemetry.i2c_comm_error_ic1 || telemetry.i2c_comm_error_ic2);
 
-    // If BMS is online, initialize both BQ76920 chips
+    // Step 3: Initialize chips
     if (telemetry.bms_online) {
-        // Initialize first BQ76920 on I2C1
+        Log_Message(BMS_MSG_LEVEL_INFO, "BMS ICs are online. Proceeding with initialization...");
+
         BQ76920_Initialise(&bms_instance1, &hi2c1);
-        // Initialize second BQ76920 on I2C2
         BQ76920_Initialise(&bms_instance2, &hi2c2);
-        // Wait 250ms for chips to stabilize
-        HAL_Delay(250);
+        SoftwareDelay(10);
+
+        BQ76920_WakeAndConfigure(&bms_instance1);
+        BQ76920_WakeAndConfigure(&bms_instance2);
+        SoftwareDelay(250);
+
+        Log_Message(BMS_MSG_LEVEL_INFO, "BMS initialization and configuration completed.");
     } else {
-        // Log an error if initialization fails
-    	Log_Message(BMS_MSG_LEVEL_ERROR,"BMS initialization failed");
+        if (telemetry.i2c_comm_error_ic1)
+            Log_Message(BMS_MSG_LEVEL_ERROR, "BMS IC1 (I2C1) failed to respond during initialization");
+        if (telemetry.i2c_comm_error_ic2)
+            Log_Message(BMS_MSG_LEVEL_ERROR, "BMS IC2 (I2C2) failed to respond during initialization");
+        if (!telemetry.i2c_comm_error_ic1 && !telemetry.i2c_comm_error_ic2)
+            Log_Message(BMS_MSG_LEVEL_ERROR, "BMS initialization failed for unknown reason");
     }
 
-    // Load saved telemetry from flash
+    // Step 4: Restore persistent telemetry
+    Log_Message(BMS_MSG_LEVEL_INFO, "Restoring telemetry from flash...");
     Flash_ReadTelemetry();
-    // Record the current time for flash storage timing
     last_save_time = HAL_GetTick();
+    Log_Message(BMS_MSG_LEVEL_DEBUG, "Telemetry restored. Init timestamp = %lu ms", last_save_time);
+}
+
+
+
+void BQ76920_WakeAndConfigure(BQ76920_t *bms) {
+    uint8_t sys_ctrl2 = 0;
+    HAL_StatusTypeDef status;
+
+    // --- Step 1: Read current SYS_CTRL2 ---
+    status = BQ76920_ReadRegister(bms, SYS_CTRL2, &sys_ctrl2, NULL);
+    if (status != HAL_OK) {
+        Log_Message(BMS_MSG_LEVEL_ERROR, "Failed to read SYS_CTRL2 during wake/config.");
+        return;
+    }
+    Log_Message(BMS_MSG_LEVEL_DEBUG, "Original SYS_CTRL2 = 0x%02X", sys_ctrl2);
+
+    // --- Step 2: Clear SHUT_A and SHUT_B bits (bits 2 and 3) ---
+    sys_ctrl2 &= ~((1 << 2) | (1 << 3));
+
+    // --- Step 3: Set FET_EN (bit 4), ADC_EN (bit 1), TEMP_SEL (bit 0) ---
+    sys_ctrl2 |= (1 << 4) | (1 << 1) | (1 << 0);
+
+    // --- Step 4: Write updated value back ---
+    status = BQ76920_WriteRegister(bms, SYS_CTRL2, &sys_ctrl2, NULL);
+    if (status != HAL_OK) {
+        Log_Message(BMS_MSG_LEVEL_ERROR, "Failed to write SYS_CTRL2 during wake/config.");
+    } else {
+        Log_Message(BMS_MSG_LEVEL_INFO, "BQ76920 configured successfully (SYS_CTRL2 = 0x%02X)", sys_ctrl2);
+    }
+
+    SoftwareDelay(1); // Optional stabilization delay
 }
 
 // Function: BMS_Service_HandleAlerts
@@ -145,35 +204,99 @@ void BMS_Service_Init(void) {
 //   - Checks for alerts (e.g., overvoltage, overcurrent) from both BQ76920 chips and updates
 //     communication status, ensuring the BMS responds to issues.
 void BMS_Service_HandleAlerts(void) {
-    // Read alerts from first BQ76920
     readAlert(&bms_instance1);
-    // Read alerts from second BQ76920
     readAlert(&bms_instance2);
 
-    // Update I2C communication status for first chip
     telemetry.i2c_comm_error_ic1 = (HAL_I2C_GetState(&hi2c1) != HAL_I2C_STATE_READY);
-    // Update I2C communication status for second chip
     telemetry.i2c_comm_error_ic2 = (HAL_I2C_GetState(&hi2c2) != HAL_I2C_STATE_READY);
-    // Set BMS online if no I2C errors
     telemetry.bms_online = !(telemetry.i2c_comm_error_ic1 || telemetry.i2c_comm_error_ic2);
 
-    // Check for device-ready alerts (XREADY, bit 6 in SYS_STAT)
-    if (getAlert(&bms_instance1, 6) || getAlert(&bms_instance2, 6)) {
-        // Declare variable for SYS_CTRL2
-        uint8_t sys_ctrl2;
-        // Read SYS_CTRL2 for first BQ76920
-        BQ76920_ReadRegister(&bms_instance1, SYS_CTRL2, &sys_ctrl2, NULL);
-        // Set bit 2 (ALERT_EN) to handle XREADY
-        sys_ctrl2 |= (1 << 2);
-        // Write updated SYS_CTRL2
-        BQ76920_WriteRegister(&bms_instance1, SYS_CTRL2, &sys_ctrl2, NULL);
+    if (telemetry.i2c_comm_error_ic1 || telemetry.i2c_comm_error_ic2) {
+        Log_Message(BMS_MSG_LEVEL_ERROR, "I2C error detected: IC1 = %d, IC2 = %d",
+                    telemetry.i2c_comm_error_ic1, telemetry.i2c_comm_error_ic2);
+        turnCHGOff(&bms_instance1);
+        turnDSGOff(&bms_instance1);
+        turnCHGOff(&bms_instance2);
+        turnDSGOff(&bms_instance2);
+    }
 
-        // Read SYS_CTRL2 for second BQ76920
-        BQ76920_ReadRegister(&bms_instance2, SYS_CTRL2, &sys_ctrl2, NULL);
-        // Set bit 2 (ALERT_EN) to handle XREADY
-        sys_ctrl2 |= (1 << 2);
-        // Write updated SYS_CTRL2
-        BQ76920_WriteRegister(&bms_instance2, SYS_CTRL2, &sys_ctrl2, NULL);
+    float Vcell[NUMBER_OF_CELLS];
+    for (int i = 0; i < NUMBER_OF_CELLS; i++) {
+        float v1 = getCellVoltage(&bms_instance1, VC1 + i * 2);
+        float v2 = getCellVoltage(&bms_instance2, VC1 + i * 2);
+        Vcell[i] = (v1 + v2) / 2.0f;
+
+        telemetry.vcell_ic1[i] = (uint16_t)(v1 * 1000);
+        telemetry.vcell_ic2[i] = (uint16_t)(v2 * 1000);
+    }
+
+    float current1 = getCurrent(&bms_instance1);
+    float current2 = getCurrent(&bms_instance2);
+    float PackCurrent = (current1 + current2) / 2.0f;
+
+    telemetry.current_ic1 = (int16_t)(current1 * 1000);
+    telemetry.current_ic2 = (int16_t)(current2 * 1000);
+
+    static uint8_t UV = 0, OV = 0, OC = 0, SC = 0;
+
+    if (getAlert(&bms_instance1, 6) || getAlert(&bms_instance2, 6)) {
+        Log_Message(BMS_MSG_LEVEL_WARNING, "XREADY bit set. Re-configuring BQ76920 chips...");
+        BQ76920_WakeAndConfigure(&bms_instance1);
+        BQ76920_WakeAndConfigure(&bms_instance2);
+    }
+
+    if (getAlert(&bms_instance1, 3) || getAlert(&bms_instance2, 3)) {
+        if (checkUV(Vcell)) {
+            Log_Message(BMS_MSG_LEVEL_WARNING, "Undervoltage detected. Disabling discharge.");
+            turnDSGOff(&bms_instance1);
+            turnDSGOff(&bms_instance2);
+        }
+    } else if (checkNotUV(Vcell, UV)) {
+        Log_Message(BMS_MSG_LEVEL_INFO, "Undervoltage cleared. Enabling discharge.");
+        turnDSGOn(&bms_instance1);
+        turnDSGOn(&bms_instance2);
+    }
+
+    if (getAlert(&bms_instance1, 2) || getAlert(&bms_instance2, 2)) {
+        if (checkOV(Vcell) && PackCurrent >= 0) {
+            Log_Message(BMS_MSG_LEVEL_WARNING, "Overvoltage detected. Disabling charge.");
+            turnCHGOff(&bms_instance1);
+            turnCHGOff(&bms_instance2);
+            SOHPack(&bms_instance1);
+            SOHPack(&bms_instance2);
+        }
+    } else if (checkNotOV(Vcell, OV)) {
+        Log_Message(BMS_MSG_LEVEL_INFO, "Overvoltage cleared. Enabling charge.");
+        turnCHGOn(&bms_instance1);
+        turnCHGOn(&bms_instance2);
+    }
+
+    if (getAlert(&bms_instance1, 0) || getAlert(&bms_instance2, 0)) {
+        if (checkOC(PackCurrent)) {
+            Log_Message(BMS_MSG_LEVEL_WARNING, "Overcurrent in discharge detected. Disabling discharge.");
+            turnDSGOff(&bms_instance1);
+            turnDSGOff(&bms_instance2);
+        }
+    } else if (checkNotOC(PackCurrent, OC)) {
+        Log_Message(BMS_MSG_LEVEL_INFO, "Overcurrent cleared. Enabling discharge.");
+        turnDSGOn(&bms_instance1);
+        turnDSGOn(&bms_instance2);
+    }
+
+    if (getAlert(&bms_instance1, 1) || getAlert(&bms_instance2, 1)) {
+        if (checkSC(PackCurrent)) {
+            Log_Message(BMS_MSG_LEVEL_CRITICAL, "Short-circuit detected! Disabling CHG and DSG.");
+            turnDSGOff(&bms_instance1);
+            turnDSGOff(&bms_instance2);
+            turnCHGOff(&bms_instance1);
+            turnCHGOff(&bms_instance2);
+        }
+    } else if (checkNotSC(PackCurrent, SC)) {
+        Log_Message(BMS_MSG_LEVEL_INFO, "Short-circuit cleared. Re-enabling CHG and DSG.");
+        turnDSGOn(&bms_instance1);
+        turnDSGOn(&bms_instance2);
+        turnCHGOn(&bms_instance1);
+        turnCHGOn(&bms_instance2);
     }
 }
 
@@ -186,52 +309,46 @@ void BMS_Service_HandleAlerts(void) {
 //   - Reads voltages, currents, and PCB temperature, storing them in telemetry with
 //     sanity checks to ensure valid data.
 void BMS_Service_ReadMeasurements(void) {
-	float temp = Read_PCB_Temperature();
-	telemetry.pcb_temperature = temp;
-	BMS_CheckSanity("PCB_Temp", temp, MIN_TEMPERATURE_C, MAX_TEMPERATURE_C);
-	// --- TMP100 readings for pack temperature ---
-	telemetry.pack_temperature_ic1 = TMP100_ReadTemperature(&hi2c1, TMP100_IC1_ADDR);
-	telemetry.pack_temperature_ic2 = TMP100_ReadTemperature(&hi2c2, TMP100_IC2_ADDR);
+    Log_Message(BMS_MSG_LEVEL_DEBUG, "Reading PCB and pack temperatures...");
 
-	// Optional sanity check
-	BMS_CheckSanity("TMP100_IC1", telemetry.pack_temperature_ic1, MIN_TEMPERATURE_C, MAX_TEMPERATURE_C);
-	BMS_CheckSanity("TMP100_IC2", telemetry.pack_temperature_ic2, MIN_TEMPERATURE_C, MAX_TEMPERATURE_C);
-    // Read current from first BQ76920 and convert to mA
-    telemetry.current_ic1 = (int16_t)(getCurrent(&bms_instance1) * 1000);
-    // Read current from second BQ76920 and convert to mA
-    telemetry.current_ic2 = (int16_t)(getCurrent(&bms_instance2) * 1000);
+    // 🧪 Read PCB temperature via STM32 internal sensor
+    float temp = Read_PCB_Temperature();
+    telemetry.pcb_temperature = temp;
+    BMS_CheckSanity("PCB_Temp", temp, MIN_TEMPERATURE_C, MAX_TEMPERATURE_C);
+    Log_Message(BMS_MSG_LEVEL_VERBOSE, "PCB Temperature: %.2f C", temp);
 
-    // Read cell voltages for both BQ76920 chips
-    for (int i = 0; i < NUMBER_OF_CELLS; i++) { // NUMBER_OF_CELLS is 4 (BQ76920.h)
-        // Read voltage for cell i from first BQ76920
-        float v1 = getCellVoltage(&bms_instance1, VC1 + i * 2);
-        // Read voltage for cell i from second BQ76920
-        float v2 = getCellVoltage(&bms_instance2, VC1 + i * 2);
+    // 🧪 TMP100 external temperature sensors
+    telemetry.pack_temperature_ic1 = TMP100_ReadTemperature(&hi2c1, TMP100_IC1_ADDR);
+    telemetry.pack_temperature_ic2 = TMP100_ReadTemperature(&hi2c2, TMP100_IC2_ADDR);
+    BMS_CheckSanity("TMP100_IC1", telemetry.pack_temperature_ic1, MIN_TEMPERATURE_C, MAX_TEMPERATURE_C);
+    BMS_CheckSanity("TMP100_IC2", telemetry.pack_temperature_ic2, MIN_TEMPERATURE_C, MAX_TEMPERATURE_C);
+    Log_Message(BMS_MSG_LEVEL_VERBOSE, "Pack Temps: IC1 = %.2f C, IC2 = %.2f C",
+                telemetry.pack_temperature_ic1,
+                telemetry.pack_temperature_ic2);
 
-        // Store voltage in mV for first chip
-        telemetry.vcell_ic1[i] = (uint16_t)(v1 * 1000);
-        // Store voltage in mV for second chip
-        telemetry.vcell_ic2[i] = (uint16_t)(v2 * 1000);
-
-        // Check if voltages are within safe range (2.5V–4.3V, BMS_Service.h)
-        BMS_CheckSanity("Cell_IC1", v1, MIN_CELL_VOLTAGE, MAX_CELL_VOLTAGE);
-        BMS_CheckSanity("Cell_IC2", v2, MIN_CELL_VOLTAGE, MAX_CELL_VOLTAGE);
-    }
-
-    // Convert currents back to amps for sanity checks
-    float current1 = telemetry.current_ic1 / 1000.0f;
-    float current2 = telemetry.current_ic2 / 1000.0f;
-
-    // Check if currents are within safe range (±30A, BMS_Service.h)
+    // 🧪 Read current in mA from both BQ76920s
+    float current1 = getCurrent(&bms_instance1);
+    float current2 = getCurrent(&bms_instance2);
+    telemetry.current_ic1 = (int16_t)(current1 * 1000);
+    telemetry.current_ic2 = (int16_t)(current2 * 1000);
     BMS_CheckSanity("Current_IC1", current1, -MAX_PACK_CURRENT, MAX_PACK_CURRENT);
     BMS_CheckSanity("Current_IC2", current2, -MAX_PACK_CURRENT, MAX_PACK_CURRENT);
+    Log_Message(BMS_MSG_LEVEL_VERBOSE, "Pack Current: IC1 = %.3f A, IC2 = %.3f A", current1, current2);
 
+    // 🧪 Read and log cell voltages
+    for (int i = 0; i < NUMBER_OF_CELLS; i++) {
+        float v1 = getCellVoltage(&bms_instance1, VC1 + i * 2);
+        float v2 = getCellVoltage(&bms_instance2, VC1 + i * 2);
+        telemetry.vcell_ic1[i] = (uint16_t)(v1 * 1000);  // in mV
+        telemetry.vcell_ic2[i] = (uint16_t)(v2 * 1000);  // in mV
+        BMS_CheckSanity("Cell_IC1", v1, MIN_CELL_VOLTAGE, MAX_CELL_VOLTAGE);
+        BMS_CheckSanity("Cell_IC2", v2, MIN_CELL_VOLTAGE, MAX_CELL_VOLTAGE);
+        Log_Message(BMS_MSG_LEVEL_VERBOSE, "Cell %d Voltages: IC1 = %.3f V, IC2 = %.3f V", i + 1, v1, v2);
+    }
 
-    // Store temperature in telemetry
-    telemetry.pcb_temperature = temp;
-    // Check if temperature is within safe range (-40°C to 85°C, BMS_Service.h)
-    BMS_CheckSanity("PCB_Temp", temp, MIN_TEMPERATURE_C, MAX_TEMPERATURE_C);
+    Log_Message(BMS_MSG_LEVEL_DEBUG, "Measurement read complete.");
 }
+
 
 // Function: BMS_Service_ProcessData
 // Inputs:
@@ -242,52 +359,57 @@ void BMS_Service_ReadMeasurements(void) {
 //   - Calculates SOC and SOH, updates alerts, and manages cell balancing, ensuring
 //     the BMS tracks battery state and safety.
 void BMS_Service_ProcessData(void) {
-    // Calculate SOC for first BQ76920 (current and voltage in amps and volts)
+    // ⏱ SOC calculation for both BMS ICs
     float soc1 = SOCPack(&bms_instance1, telemetry.current_ic1 / 1000.0f,
                          telemetry.vpack_ic1 / 1000.0f);
-    // Calculate SOC for second BQ76920
     float soc2 = SOCPack(&bms_instance2, telemetry.current_ic2 / 1000.0f,
                          telemetry.vpack_ic2 / 1000.0f);
-    // Average the SOC values and clamp between 0% and 100%
     telemetry.soc = fminf(fmaxf((soc1 + soc2) / 2.0f, 0.0f), 100.0f);
+    Log_Message(BMS_MSG_LEVEL_INFO, "SOC: IC1 = %.2f%%, IC2 = %.2f%%, Avg = %.2f%%", soc1, soc2, telemetry.soc);
 
-    // Calculate SOH for first BQ76920
+    // 🩺 SOH calculation
     float soh1 = SOHPack(&bms_instance1);
-    // Calculate SOH for second BQ76920
     float soh2 = SOHPack(&bms_instance2);
-    // Average the SOH values
     telemetry.soh = (soh1 + soh2) / 2.0f;
+    Log_Message(BMS_MSG_LEVEL_INFO, "SOH: IC1 = %.2f%%, IC2 = %.2f%%, Avg = %.2f%%", soh1, soh2, telemetry.soh);
 
-    // Update error flags for all 8 bits
+    // 🚨 Alert bits from SYS_STAT (0–7)
     for (int i = 0; i < 8; i++) {
-        // Set flag if either BQ76920 reports an alert
         telemetry.error_flags[i] = getAlert(&bms_instance1, i) || getAlert(&bms_instance2, i);
+        if (telemetry.error_flags[i]) {
+            Log_Message(BMS_MSG_LEVEL_WARNING, "Alert bit %d active on IC1 or IC2", i);
+        }
     }
 
-    // Update specific alerts from SYS_STAT
-    telemetry.ovrd_alert_ic1 = getAlert(&bms_instance1, 5); // Overcurrent/short-circuit alert
-    telemetry.ovrd_alert_ic2 = getAlert(&bms_instance2, 5);
-    telemetry.device_xready_ic1 = getAlert(&bms_instance1, 6); // Device ready alert
-    telemetry.device_xready_ic2 = getAlert(&bms_instance2, 6);
-    telemetry.load_present_ic1 = getAlert(&bms_instance1, 7); // Load detection alert
-    telemetry.load_present_ic2 = getAlert(&bms_instance2, 7);
+    // 🔍 Specific status flags
+    telemetry.ovrd_alert_ic1     = getAlert(&bms_instance1, 5);
+    telemetry.ovrd_alert_ic2     = getAlert(&bms_instance2, 5);
+    telemetry.device_xready_ic1  = getAlert(&bms_instance1, 6);
+    telemetry.device_xready_ic2  = getAlert(&bms_instance2, 6);
+    telemetry.load_present_ic1   = getAlert(&bms_instance1, 7);
+    telemetry.load_present_ic2   = getAlert(&bms_instance2, 7);
 
-    // Enable cell balancing for first BQ76920 if charging
-    EnableBalanceCell(&bms_instance1, telemetry.current_ic1 / 1000.0f);
-    // Enable cell balancing for second BQ76920 if charging
-    EnableBalanceCell(&bms_instance2, telemetry.current_ic2 / 1000.0f);
+    Log_Message(BMS_MSG_LEVEL_VERBOSE, "SYS_STAT: OVRD[%d,%d], XREADY[%d,%d], LOAD[%d,%d]",
+                telemetry.ovrd_alert_ic1, telemetry.ovrd_alert_ic2,
+                telemetry.device_xready_ic1, telemetry.device_xready_ic2,
+                telemetry.load_present_ic1, telemetry.load_present_ic2);
 
-    // Read balancing status for first BQ76920
+    // 🔄 Cell balancing mask
     telemetry.balancing_mask_ic1 = justRead1(&bms_instance1);
-    // Read balancing status for second BQ76920
     telemetry.balancing_mask_ic2 = justRead1(&bms_instance2);
-    // Set balancing active if either chip is balancing
-    telemetry.balancing_active = (telemetry.balancing_mask_ic1 ||
-                                telemetry.balancing_mask_ic2) ? 1 : 0;
+    telemetry.balancing_active = (telemetry.balancing_mask_ic1 || telemetry.balancing_mask_ic2) ? 1 : 0;
+    if (telemetry.balancing_active) {
+        Log_Message(BMS_MSG_LEVEL_INFO, "Cell balancing active: Mask IC1=0x%02X, IC2=0x%02X",
+                    telemetry.balancing_mask_ic1, telemetry.balancing_mask_ic2);
+    }
 
-    // Set charge flag if SOC is low (<20%)
-    telemetry.charge_immediately = (telemetry.soc < 20.0f) ? 1 : 0;
+//    // 🔋 Charging recommendation
+//    telemetry.charge_immediately = (telemetry.soc < 20.0f) ? 1 : 0;
+//    if (telemetry.charge_immediately) {
+//        Log_Message(BMS_MSG_LEVEL_WARNING, "SOC below 20%% — recommend charging immediately.");
+//    }
 }
+
 
 // Function: BMS_Service_UpdateCounters
 // Inputs:
@@ -298,26 +420,37 @@ void BMS_Service_ProcessData(void) {
 //   - Updates time-based counters (operating, charge, discharge time) and charge cycle count,
 //     tracking battery usage for telemetry.
 void BMS_Service_UpdateCounters(uint32_t delta_time) {
-    // Add elapsed time to total operating time
+    // Add to total operation time
     telemetry.total_operating_time += delta_time;
 
-    // If either chip is charging (positive current)
-    if (telemetry.current_ic1 > 0 || telemetry.current_ic2 > 0) {
-        // Add elapsed time to total charge time
+    // Average current in mA
+    float avg_current = (telemetry.current_ic1 + telemetry.current_ic2) / 2.0f;
+
+    // Charging state
+    if (avg_current > 0) {
         telemetry.total_charge_time += delta_time;
-        // If SOC is nearly full (≥99%) and current is low (≤100mA), count a charge cycle
-        if (telemetry.soc >= 99.0f &&
-            (abs(telemetry.current_ic1) <= 100 ||
-            abs(telemetry.current_ic2) <= 100)) {
-            telemetry.charge_cycle_count++;
+
+        static uint8_t charge_debounce = 0;
+
+        if (telemetry.soc >= 99.0f && fabsf(avg_current) <= 100.0f) {
+            // Only count once every 60 seconds minimum (arbitrary cooldown)
+            charge_debounce += delta_time;
+            if (charge_debounce >= 60000) {
+                telemetry.charge_cycle_count++;
+                charge_debounce = 0;
+                Log_Message(BMS_MSG_LEVEL_INFO, "Charge cycle counted. Total: %lu",
+                            telemetry.charge_cycle_count);
+            }
+        } else {
+            charge_debounce = 0; // reset debounce if conditions not met
         }
     }
-    // If either chip is discharging (negative current)
-    else if (telemetry.current_ic1 < 0 || telemetry.current_ic2 < 0) {
-        // Add elapsed time to total discharge time
+    // Discharging state
+    else if (avg_current < 0) {
         telemetry.total_discharge_time += delta_time;
     }
 }
+
 
 // Function: BMS_Service_HandleLowPowerCondition
 // Inputs:
@@ -328,25 +461,27 @@ void BMS_Service_UpdateCounters(uint32_t delta_time) {
 //   - Monitors SOC and enters SHIP mode if critically low (<5%) for 5 minutes,
 //     saving battery power in critical conditions.
 void BMS_Service_HandleLowPowerCondition(uint8_t *low_power_mode) {
-    // If SOC is critically low (<5%)
+    uint32_t now = HAL_GetTick();
+    static uint32_t last_check = 0;
+
     if (telemetry.soc < 5.0f) {
-        // Add elapsed time (in seconds) to low-power timer
-        low_power_timer += (HAL_GetTick() - last_save_time) / 1000;
-        // If low SOC persists for 5 minutes (300 seconds)
-        if (low_power_timer > 300) {
-            // Enter SHIP mode for first BQ76920
+        // Accumulate only if we're checking periodically
+        if (last_check > 0) {
+            low_power_timer += (now - last_check) / 1000; // seconds
+        }
+
+        if (low_power_timer >= 300) {
+            Log_Message(BMS_MSG_LEVEL_WARNING, "Low SOC persisted > 5 min. Entering SHIP mode...");
             Enter_SHIP_Mode(&bms_instance1);
-            // Enter SHIP mode for second BQ76920
             Enter_SHIP_Mode(&bms_instance2);
-            // Set low-power mode flag
             *low_power_mode = 1;
-            // Reset the timer
             low_power_timer = 0;
         }
     } else {
-        // Reset the timer if SOC is above 5%
         low_power_timer = 0;
     }
+
+    last_check = now;
 }
 
 // Function: BMS_Service_HandleLowPowerMode
@@ -358,32 +493,37 @@ void BMS_Service_HandleLowPowerCondition(uint8_t *low_power_mode) {
 //   - Attempts to wake the BQ76920 chips from SHIP mode by toggling boot pins,
 //     reinitializing them if responsive.
 void BMS_Service_HandleLowPowerMode(uint8_t *low_power_mode) {
-    // Wake-up sequence: toggle boot pins (BOOT1_Pin, BOOT2_Pin)
-    HAL_GPIO_WritePin(bms_instance1.bootPort, bms_instance1.bootPin, GPIO_PIN_SET); // Set BOOT1 high
-    HAL_GPIO_WritePin(bms_instance2.bootPort, bms_instance2.bootPin, GPIO_PIN_SET); // Set BOOT2 high
-    HAL_Delay(3); // Wait 3ms for chips to respond
-    HAL_GPIO_WritePin(bms_instance1.bootPort, bms_instance1.bootPin, GPIO_PIN_RESET); // Set BOOT1 low
-    HAL_GPIO_WritePin(bms_instance2.bootPort, bms_instance2.bootPin, GPIO_PIN_RESET); // Set BOOT2 low
-    HAL_Delay(10); // Wait 10ms for stabilization
+    // Step 1: Pulse BOOT pins high -> low to wake up BQ76920s
+    HAL_GPIO_WritePin(bms_instance1.bootPort, bms_instance1.bootPin, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(bms_instance2.bootPort, bms_instance2.bootPin, GPIO_PIN_SET);
+    SoftwareDelay(3);  // Minimum 2ms required, using 3ms for safety
+    HAL_GPIO_WritePin(bms_instance1.bootPort, bms_instance1.bootPin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(bms_instance2.bootPort, bms_instance2.bootPin, GPIO_PIN_RESET);
+    SoftwareDelay(10); // Allow boot circuitry to stabilize
 
-    // Check if BQ76920 chips are responsive
+    // Step 2: Check I2C readiness of both BQ76920 devices
     telemetry.i2c_comm_error_ic1 = (HAL_I2C_IsDeviceReady(&hi2c1, BQ76920_ADDRESS, 2, HAL_MAX_DELAY) != HAL_OK);
     telemetry.i2c_comm_error_ic2 = (HAL_I2C_IsDeviceReady(&hi2c2, BQ76920_ADDRESS, 2, HAL_MAX_DELAY) != HAL_OK);
 
-    // If no I2C errors, reinitialize chips
+    // Step 3: If both chips are online, reinitialize and exit low-power mode
     if (!(telemetry.i2c_comm_error_ic1 || telemetry.i2c_comm_error_ic2)) {
-        // Clear low-power mode flag
         *low_power_mode = 0;
-        // Set BMS online
         telemetry.bms_online = 1;
-        // Reinitialize first BQ76920
+
         BQ76920_Initialise(&bms_instance1, &hi2c1);
-        // Reinitialize second BQ76920
         BQ76920_Initialise(&bms_instance2, &hi2c2);
-        // Wait 250ms for stabilization
-        HAL_Delay(250);
+        SoftwareDelay(10);  // Optional settle delay
+        BQ76920_WakeAndConfigure(&bms_instance1);
+        BQ76920_WakeAndConfigure(&bms_instance2);
+        SoftwareDelay(250);  // Allow system stabilization
+
+        Log_Message(BMS_MSG_LEVEL_INFO, "Exited SHIP mode. BQ76920s reinitialized.");
+    } else {
+        Log_Message(BMS_MSG_LEVEL_ERROR, "Failed to wake BQ76920. IC1_ready=%d, IC2_ready=%d",
+                    !telemetry.i2c_comm_error_ic1, !telemetry.i2c_comm_error_ic2);
     }
 }
+
 
 // Function: BMS_Service_HandleFlashStorage
 // Inputs:
@@ -394,23 +534,75 @@ void BMS_Service_HandleLowPowerMode(uint8_t *low_power_mode) {
 //   - Saves telemetry to flash when SOC changes significantly (>1%) or every 5 minutes,
 //     ensuring persistent data storage.
 void BMS_Service_HandleFlashStorage(void) {
-    // Get the current system tick (milliseconds)
+    // Get the current system tick (in milliseconds)
     uint32_t current_time = HAL_GetTick();
 
-    // If SOC has changed by more than 1%
-    if (fabs(telemetry.soc - last_soc) > 1.0f) {
-        // Save telemetry to flash
+    // Compute time since last save, safely handling HAL_GetTick() overflow
+    uint32_t time_since_last_save = current_time - last_save_time;
+
+    // Check for significant SOC change (more than 1%)
+    if (fabsf(telemetry.soc - last_soc) > 1.0f) {
         Flash_WriteTelemetry();
-        // Update last SOC value
         last_soc = telemetry.soc;
-        // Update last save time
         last_save_time = current_time;
+        Log_Message(BMS_MSG_LEVEL_INFO, "Flash write triggered by SOC change: %.2f%%", telemetry.soc);
     }
-    // If 5 minutes (300,000ms) have passed since last save
-    else if (current_time - last_save_time > 300000) {
-        // Save telemetry to flash
+    // Check if 5 minutes have passed since last save (300,000ms)
+    else if (time_since_last_save > 300000) {
         Flash_WriteTelemetry();
-        // Update last save time
         last_save_time = current_time;
+        Log_Message(BMS_MSG_LEVEL_INFO, "Flash write triggered by periodic timeout (5 min)");
     }
 }
+
+
+
+
+float GetReliableCellVoltage(uint8_t cell_idx)
+{
+    if (cell_idx > 3) {
+        Log_Message(BMS_MSG_LEVEL_ERROR, "Invalid cell index: %u", cell_idx);
+        return 0.0f;
+    }
+
+    float v1 = getCellVoltage(&bms_instance1, VC1 + cell_idx * 2);
+    float v2 = getCellVoltage(&bms_instance2, VC1 + cell_idx * 2);
+
+    bool ic1_valid = (v1 >= MIN_CELL_VOLTAGE && v1 <= MAX_CELL_VOLTAGE);
+    bool ic2_valid = (v2 >= MIN_CELL_VOLTAGE && v2 <= MAX_CELL_VOLTAGE);
+
+    if (telemetry.i2c_comm_error_ic1 && !telemetry.i2c_comm_error_ic2 && ic2_valid) {
+        // Primary IC1 is offline, backup IC2 is good
+        return v2;
+    }
+
+    if (!telemetry.i2c_comm_error_ic1 && ic1_valid) {
+        // Primary IC1 is online and data valid
+        return v1;
+    }
+
+    if (!telemetry.i2c_comm_error_ic1 && !ic1_valid &&
+        !telemetry.i2c_comm_error_ic2 && ic2_valid) {
+        // IC1 online but invalid data; IC2 good
+        return v2;
+    }
+
+    if (telemetry.i2c_comm_error_ic1 && telemetry.i2c_comm_error_ic2) {
+        // Both ICs are offline
+        Log_Message(BMS_MSG_LEVEL_CRITICAL, "Both BMS ICs offline for cell %u", cell_idx);
+        return 0.0f;
+    }
+
+    if (ic1_valid && ic2_valid) {
+        // Both online and valid – prefer primary, or average
+        return v1; // or: return (v1 + v2) / 2.0f;
+    }
+
+    Log_Message(BMS_MSG_LEVEL_WARNING, "Unresolved state: IC1 err:%u valid:%u, IC2 err:%u valid:%u",
+                telemetry.i2c_comm_error_ic1, ic1_valid,
+                telemetry.i2c_comm_error_ic2, ic2_valid);
+
+    return 0.0f; // Conservative fallback
+}
+
+

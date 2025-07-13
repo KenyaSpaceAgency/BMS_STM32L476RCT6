@@ -21,10 +21,11 @@
 // ---------------------- THRESHOLD DEFINITIONS ----------------------
 
 // Minimum voltage for a healthy cell (in volts)
-#define MIN_CELL_VOLTAGE     2.5f   // Below this, cell is at risk of undervoltage
+#define MIN_CELL_VOLTAGE 2500.0f  // in mV
+
 
 // Maximum allowed voltage for a cell (in volts)
-#define MAX_CELL_VOLTAGE     4.3f   // Above this, cell might be overcharged
+#define MAX_CELL_VOLTAGE 4300.0f  // in mV   // Above this, cell might be overcharged
 
 // Maximum allowed current drawn from or pushed into the pack (in amperes)
 #define MAX_PACK_CURRENT     30.0f  // Above this might indicate short or overload
@@ -151,7 +152,8 @@ void BMS_Service_HandleLowPowerMode(uint8_t *low_power_mode);
 // ----------------------------------------------------------------
 void BMS_Service_HandleFlashStorage(void);
 
-
+void BQ76920_WakeAndConfigure(BQ76920_t *bms);
+void WakeUpBQ(BQ76920_t *bms);
 // ====================== EXTERNAL VARIABLES ======================
 
 // These are shared variables that are defined in the `.c` file and used across the system

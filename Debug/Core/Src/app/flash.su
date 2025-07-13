@@ -1,7 +1,9 @@
-../Core/Src/app/flash.c:30:10:CalculateCRC16	32	static
-../Core/Src/app/flash.c:57:19:Flash_WriteDoubleWord	32	static
-../Core/Src/app/flash.c:86:10:Flash_ReadDoubleWord	16	static
-../Core/Src/app/flash.c:106:19:Flash_ErasePage	40	static
-../Core/Src/app/flash.c:145:6:Flash_WriteTelemetry	168	static
-../Core/Src/app/flash.c:185:6:Flash_ReadTelemetry	160	static
-../Core/Src/app/flash.c:214:6:Flash_RecoverWritePointer	160	static
+../Core/Src/app/flash.c:12:10:CalculateCRC16	32	static
+../Core/Src/app/flash.c:23:19:Flash_WriteDoubleWord	32	static
+../Core/Src/app/flash.c:40:10:Flash_ReadDoubleWord	16	static
+../Core/Src/app/flash.c:48:17:Flash_GetPage	16	static
+../Core/Src/app/flash.c:52:19:Flash_ErasePage	40	static
+../Core/Src/app/flash.c:78:6:Flash_WriteBytes	40	static
+../Core/Src/app/flash.c:106:6:Flash_WriteTelemetry	168	static
+../Core/Src/app/flash.c:135:6:Flash_ReadTelemetry	160	static
+../Core/Src/app/flash.c:153:6:Flash_RecoverWritePointer	168	static

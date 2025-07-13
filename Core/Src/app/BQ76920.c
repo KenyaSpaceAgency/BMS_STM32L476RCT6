@@ -7,6 +7,8 @@
 #include <stdbool.h>        // Adds support for true/false boolean values
 #include <stdlib.h>         // Includes utility functions like abs() for absolute value calculations
 #include <math.h>           // Includes math functions like logf() for temperature calculations
+#include <stdbool.h> // for bool type
+#include "delay.h"
 
 // Function: calculateCRC
 // Inputs:
@@ -43,72 +45,82 @@ static uint8_t calculateCRC(uint8_t *data, uint8_t length) {
 //     and protection settings. It’s called at startup to prepare the chip for monitoring the
 //     battery pack (datasheet Section 8.3, page 20).
 void BQ76920_Initialise(BQ76920_t *BMS, I2C_HandleTypeDef *i2cHandle) {
-    BMS->i2cHandle = i2cHandle; // Store the I2C handle in the BMS structure for communication
-    BMS->SOH = 100.0f; // Set State of Health to 100% (perfect battery health at startup)
-    BMS->wattUsage = 0; // Set total energy usage to 0 (tracks power in watt-seconds)
-    BMS->currentUsage = 0; // Set total current usage to 0 (tracks current in ampere-seconds)
+    BMS->i2cHandle = i2cHandle;
+    BMS->SOH = 100.0f;
+    BMS->wattUsage = 0;
+    BMS->currentUsage = 0;
 
-    uint8_t val; // Declare a variable to hold values we’ll write to chip registers
-    val = 0xff; // Set value to 0xFF (all bits 1) to clear all status flags
-    BQ76920_WriteRegister(BMS, SYS_STAT, &val, NULL); // Write to SYS_STAT (address 0x00) to clear status
+    Log_Message(BMS_MSG_LEVEL_INFO, "Initializing BQ76920...");
 
-    val = 0x19; // Set value 0x19 for Coulomb Counter configuration (recommended, datasheet Section 8.5.7)
-    BQ76920_WriteRegister(BMS, CC_CFG, &val, NULL); // Write to CC_CFG (address 0x0B)
+    uint8_t val;
 
-    val = (1 << 4) | (1 << 1); // Set bit 4 (ADC_EN=1) and bit 1 (CC_EN=1) to enable ADC and Coulomb Counter
-    BQ76920_WriteRegister(BMS, SYS_CTRL1, &val, NULL); // Write to SYS_CTRL1 (address 0x04, datasheet Section 8.5.3)
+    val = 0xFF;
+    BQ76920_WriteRegister(BMS, SYS_STAT, &val, NULL);
+    Log_Message(BMS_MSG_LEVEL_DEBUG, "Cleared SYS_STAT register");
 
-    val = (1 << 6); // Set bit 6 to enable continuous ADC operation
-    BQ76920_WriteRegister(BMS, SYS_CTRL2, &val, NULL); // Write to SYS_CTRL2 (address 0x05, datasheet Section 8.5.4)
+    val = 0x19;
+    BQ76920_WriteRegister(BMS, CC_CFG, &val, NULL);
+    Log_Message(BMS_MSG_LEVEL_DEBUG, "Configured CC_CFG register: 0x%02X", val);
 
-    uint8_t adc_gain1, adc_gain2; // Variables to store ADC gain values from registers
-    BQ76920_ReadRegister(BMS, ADCGAIN1, &adc_gain1, NULL); // Read ADCGAIN1 (address 0x50, datasheet Section 8.5.13)
-    BQ76920_ReadRegister(BMS, ADCGAIN2, &adc_gain2, NULL); // Read ADCGAIN2 (address 0x59)
-    // Combine bits 7:5 from ADCGAIN2 and bits 3:2 from ADCGAIN1 to get 5-bit gain value
-    // Datasheet Section 10.3.2.3.1 (page 28) explains this
+    val = (1 << 4) | (1 << 1);
+    BQ76920_WriteRegister(BMS, SYS_CTRL1, &val, NULL);
+    Log_Message(BMS_MSG_LEVEL_DEBUG, "Enabled ADC and Coulomb Counter: SYS_CTRL1=0x%02X", val);
+
+    val = (1 << 6);
+    BQ76920_WriteRegister(BMS, SYS_CTRL2, &val, NULL);
+    Log_Message(BMS_MSG_LEVEL_DEBUG, "Enabled continuous ADC operation: SYS_CTRL2=0x%02X", val);
+
+    uint8_t adc_gain1, adc_gain2;
+    BQ76920_ReadRegister(BMS, ADCGAIN1, &adc_gain1, NULL);
+    BQ76920_ReadRegister(BMS, ADCGAIN2, &adc_gain2, NULL);
     uint16_t gain_bits = ((adc_gain2 & 0xE0) >> 5) | ((adc_gain1 & 0x0C) << 1);
-    BMS->GAIN = gain_bits + 365; // Add base gain of 365 µV/LSB to get total gain (in µV/LSB)
+    BMS->GAIN = gain_bits + 365;
 
-    uint8_t offset_raw; // Variable to store raw ADC offset value
-    BQ76920_ReadRegister(BMS, ADCOFFSET, &offset_raw, NULL); // Read ADCOFFSET (address 0x51, datasheet Section 8.5.14)
-    BMS->OFFSET = (int8_t)offset_raw; // Convert to signed 8-bit value (2’s complement, in mV)
+    uint8_t offset_raw;
+    BQ76920_ReadRegister(BMS, ADCOFFSET, &offset_raw, NULL);
+    BMS->OFFSET = (int8_t)offset_raw;
 
-    uint8_t PROTECT1_VAL; // Variable to hold protection settings for short-circuit detection
-    BQ76920_ReadRegister(BMS, PROTECT1, &PROTECT1_VAL, NULL); // Read PROTECT1 (address 0x06, datasheet Section 8.5.5)
-    // Set short-circuit delay (100µs) and threshold (89mV) using predefined values
+    Log_Message(BMS_MSG_LEVEL_INFO, "GAIN: %duV/LSB, OFFSET: %dmV", BMS->GAIN, BMS->OFFSET);
+
+    uint8_t PROTECT1_VAL;
+    BQ76920_ReadRegister(BMS, PROTECT1, &PROTECT1_VAL, NULL);
     PROTECT1_VAL |= (SDC_100us_delay << 3) | SCD_Threshold_89mV;
-    BQ76920_WriteRegister(BMS, PROTECT1, &PROTECT1_VAL, NULL); // Write updated PROTECT1 settings
+    BQ76920_WriteRegister(BMS, PROTECT1, &PROTECT1_VAL, NULL);
+    Log_Message(BMS_MSG_LEVEL_DEBUG, "Configured PROTECT1: 0x%02X", PROTECT1_VAL);
 
-    uint8_t PROTECT2_VAL; // Variable for overcurrent protection settings
-    BQ76920_ReadRegister(BMS, PROTECT2, &PROTECT2_VAL, NULL); // Read PROTECT2 (address 0x07, datasheet Section 8.5.6)
-    // Set overcurrent delay (160ms) and threshold (17mV)
+    uint8_t PROTECT2_VAL;
+    BQ76920_ReadRegister(BMS, PROTECT2, &PROTECT2_VAL, NULL);
     PROTECT2_VAL |= (ODC_160ms_delay << 5) | OCD_Threshold_17mV;
-    BQ76920_WriteRegister(BMS, PROTECT2, &PROTECT2_VAL, NULL); // Write updated PROTECT2 settings
+    BQ76920_WriteRegister(BMS, PROTECT2, &PROTECT2_VAL, NULL);
+    Log_Message(BMS_MSG_LEVEL_DEBUG, "Configured PROTECT2: 0x%02X", PROTECT2_VAL);
 
-    uint8_t PROTECT3_VAL; // Variable for voltage protection delays
-    BQ76920_ReadRegister(BMS, PROTECT3, &PROTECT3_VAL, NULL); // Read PROTECT3 (address 0x08, datasheet Section 8.5.8)
-    // Set undervoltage delay (4s) and overvoltage delay (2s)
+    uint8_t PROTECT3_VAL;
+    BQ76920_ReadRegister(BMS, PROTECT3, &PROTECT3_VAL, NULL);
     PROTECT3_VAL |= (UV_Delay_4s << 6) | (OV_Delay_2s << 4);
-    BQ76920_WriteRegister(BMS, PROTECT3, &PROTECT3_VAL, NULL); // Write updated PROTECT3 settings
+    BQ76920_WriteRegister(BMS, PROTECT3, &PROTECT3_VAL, NULL);
+    Log_Message(BMS_MSG_LEVEL_DEBUG, "Configured PROTECT3: 0x%02X", PROTECT3_VAL);
 
-    uint16_t OV = grossOV * 1000; // Convert overvoltage threshold (grossOV, 4.18V) to millivolts
-    // Calculate OV_TRIP value: (V_threshold - OFFSET) / (GAIN / 1000)
+    uint16_t OV = grossOV * 1000;
     uint16_t temp = (uint16_t)((float)(OV - BMS->OFFSET) / ((float)(BMS->GAIN) / 1000));
-    temp = (temp & 0x0FF0) >> 4; // Keep bits 11:4 for 8-bit OV_TRIP register (datasheet Section 8.5.9)
-    uint8_t OV_TRIP_VAL = temp & 0xFF; // Extract lower 8 bits
-    BQ76920_WriteRegister(BMS, OV_TRIP, &OV_TRIP_VAL, NULL); // Write to OV_TRIP (address 0x09)
+    temp = (temp & 0x0FF0) >> 4;
+    uint8_t OV_TRIP_VAL = temp & 0xFF;
+    BQ76920_WriteRegister(BMS, OV_TRIP, &OV_TRIP_VAL, NULL);
+    Log_Message(BMS_MSG_LEVEL_INFO, "OV_TRIP set: %.2f V → 0x%02X", grossOV, OV_TRIP_VAL);
 
-    uint16_t UV = grossUV * 1000; // Convert undervoltage threshold (grossUV, 2.7V) to millivolts
-    // Calculate UV_TRIP value: (V_threshold - OFFSET) / (GAIN / 1000)
+    uint16_t UV = grossUV * 1000;
     temp = (uint16_t)((float)(UV - BMS->OFFSET) / ((float)(BMS->GAIN) / 1000));
-    temp = (temp & 0x0FF0) >> 4; // Keep bits 11:4 for 8-bit UV_TRIP register (datasheet Section 8.5.10)
-    uint8_t UV_TRIP_VAL = temp & 0xFF; // Extract lower 8 bits
-    BQ76920_WriteRegister(BMS, UV_TRIP, &UV_TRIP_VAL, NULL); // Write to UV_TRIP (address 0x0A)
+    temp = (temp & 0x0FF0) >> 4;
+    uint8_t UV_TRIP_VAL = temp & 0xFF;
+    BQ76920_WriteRegister(BMS, UV_TRIP, &UV_TRIP_VAL, NULL);
+    Log_Message(BMS_MSG_LEVEL_INFO, "UV_TRIP set: %.2f V → 0x%02X", grossUV, UV_TRIP_VAL);
 
-    BMS->SOH = 45.0f; // Set State of Health to 45% (temporary value for initialization)
-    BMS->SOHEnergy = 45.0f; // Set energy-based SOH to 45%
-    BMS->SOHCapacity = 45.0f; // Set capacity-based SOH to 45%
-    BMS->SOHOCV = 45.0f; // Set open-circuit voltage-based SOH to 45%
+    BMS->SOH = 45.0f;
+    BMS->SOHEnergy = 45.0f;
+    BMS->SOHCapacity = 45.0f;
+    BMS->SOHOCV = 45.0f;
+    Log_Message(BMS_MSG_LEVEL_DEBUG, "Initial SOH metrics set to 45%% for all fields.");
+
+    Log_Message(BMS_MSG_LEVEL_INFO, "BQ76920 initialization complete.");
 }
 
 // Function: getCellVoltage
@@ -123,38 +135,44 @@ void BQ76920_Initialise(BQ76920_t *BMS, I2C_HandleTypeDef *i2cHandle) {
 float getCellVoltage(BQ76920_t *BMS, int cell) {
     // Check if the cell number is valid (VC1 to VC5, but VC4 is tied to VC3)
     if (cell < VC1 || cell > VC5 || cell == VC4) {
-        if (cell == VC4) return BMS->Vcell[2]; // VC4 shares voltage with VC3 (index 2, datasheet page 21)
-        return 0.0f; // Return 0 for invalid cell numbers
+        if (cell == VC4) {
+            Log_Message(BMS_MSG_LEVEL_WARNING, "VC4 shares VC3 voltage: returning Vcell[2] = %.3f V", BMS->Vcell[2]);
+            return BMS->Vcell[2];
+        }
+        Log_Message(BMS_MSG_LEVEL_WARNING, "Invalid cell ID: %d", cell);
+        return 0.0f;
     }
 
-    uint8_t data[2]; // Array to hold high and low bytes of voltage data
-    BQ76920_ReadRegister(BMS, cell, &data[0], NULL); // Read high byte (e.g., VC1_HI at 0x0C)
-    BQ76920_ReadRegister(BMS, cell + 1, &data[1], NULL); // Read low byte (e.g., VC1_LO at 0x0D)
-    // Combine high and low bytes into a 14-bit raw ADC value (datasheet Section 8.5.15)
-    uint16_t raw = (((data[0] & 0x3f) << 8)) | data[1]; // Mask high byte to 6 bits, shift, and combine
-    // Convert raw ADC value to voltage using gain and offset
-    // Use int32_t to avoid truncation (per your request)
-    int32_t temp = 4 * (int32_t)BMS->GAIN * raw + 4 * (int32_t)BMS->OFFSET * 1000; // GAIN in µV/LSB, OFFSET in mV
-    float voltage = (float)temp / 1000000.0f; // Convert from microvolts to volts
+    uint8_t data[2] = {0};
+    BQ76920_ReadRegister(BMS, cell, &data[0], NULL);        // High byte
+    BQ76920_ReadRegister(BMS, cell + 1, &data[1], NULL);    // Low byte
 
-    // Check if voltage is valid (2.5V to 4.5V, defined in BQ76920.h)
+    uint16_t raw = (((data[0] & 0x3F) << 8) | data[1]);
+    int32_t temp = 4 * (int32_t)BMS->GAIN * raw + 4 * (int32_t)BMS->OFFSET * 1000;
+    float voltage = (float)temp / 1000000.0f;
+
     if (!IS_VALID_VOLTAGE(voltage)) {
-        voltage = 0.0f; // Set to 0 if voltage is out of range
+        Log_Message(BMS_MSG_LEVEL_WARNING, "Invalid voltage reading on cell %d: %.3f V (raw=0x%04X)", cell - VC1 + 1, voltage, raw);
+        voltage = 0.0f;
     }
 
-    // Map cell number to array index for storage
     int index;
     switch (cell) {
-        case VC1: index = 0; break; // VC1 maps to Vcell[0]
-        case VC2: index = 1; break; // VC2 maps to Vcell[1]
-        case VC3: index = 2; break; // VC3 maps to Vcell[2]
-        case VC5: index = 3; break; // VC5 maps to Vcell[3]
-        default: return 0.0f; // Return 0 for invalid cell
+        case VC1: index = 0; break;
+        case VC2: index = 1; break;
+        case VC3: index = 2; break;
+        case VC5: index = 3; break;
+        default:
+            Log_Message(BMS_MSG_LEVEL_ERROR, "Unexpected cell index mapping failed for cell %d", cell);
+            return 0.0f;
     }
 
-    BMS->Vcell[index] = voltage; // Store voltage in BMS structure
-    return voltage; // Return the calculated voltage
+    BMS->Vcell[index] = voltage;
+
+    Log_Message(BMS_MSG_LEVEL_DEBUG, "Cell %d voltage: %.3f V (raw=0x%04X, index=%d)", cell - VC1 + 1, voltage, raw, index);
+    return voltage;
 }
+
 
 // Function: getPackVoltage
 // Inputs:
@@ -165,16 +183,30 @@ float getCellVoltage(BQ76920_t *BMS, int cell) {
 //   - Reads the total voltage across all cells in the pack, used to monitor overall
 //     battery performance (datasheet Section 8.5.20, page 31).
 float getPackVoltage(BQ76920_t *BMS) {
-    uint8_t data[2]; // Array to hold high and low bytes of pack voltage
-    BQ76920_ReadRegister(BMS, BAT_LO, &data[0], NULL); // Read BAT_LO (address 0x2B)
-    BQ76920_ReadRegister(BMS, BAT_HI, &data[1], NULL); // Read BAT_HI (address 0x2A)
-    // Combine high and low bytes into a 16-bit raw ADC value
+    uint8_t data[2] = {0};
+
+    BQ76920_ReadRegister(BMS, BAT_LO, &data[0], NULL); // Read BAT_LO (0x2B)
+    BQ76920_ReadRegister(BMS, BAT_HI, &data[1], NULL); // Read BAT_HI (0x2A)
+
     uint16_t raw = (data[1] << 8) | data[0];
-    // Convert raw value to voltage, accounting for chip’s scaling (BAT is sum of cells / 4)
-    // Use int32_t to avoid truncation (per your request)
-    int32_t temp = (int32_t)raw * BMS->GAIN * 4 + (int32_t)BMS->OFFSET * 4000; // Scale by 4, OFFSET in mV
-    BMS->Vpack = (float)temp / 1000000.0f; // Convert from microvolts to volts
-    return BMS->Vpack; // Return the pack voltage
+    int32_t temp = (int32_t)raw * BMS->GAIN * 4 + (int32_t)BMS->OFFSET * 4000;
+    float voltage = (float)temp / 1000000.0f;
+
+    // Optional range check
+#ifdef IS_VALID_VOLTAGE
+    if (!IS_VALID_VOLTAGE(voltage)) {
+        Log_Message(BMS_MSG_LEVEL_WARNING, "Invalid pack voltage: %.3f V (raw=0x%04X)", voltage, raw);
+        voltage = 0.0f;
+    }
+#endif
+
+    BMS->Vpack = voltage;
+
+    Log_Message(BMS_MSG_LEVEL_DEBUG,
+        "Pack voltage: %.3f V (raw=0x%04X, BAT_HI=0x%02X, BAT_LO=0x%02X, GAIN=%d, OFFSET=%d)",
+        voltage, raw, data[1], data[0], BMS->GAIN, BMS->OFFSET);
+
+    return voltage;
 }
 
 // Function: getCurrent
@@ -186,23 +218,33 @@ float getPackVoltage(BQ76920_t *BMS) {
 //   - Measures the current using the Coulomb Counter, important for tracking
 //     charging/discharging and calculating State of Charge (datasheet Section 8.3.2, page 20).
 float getCurrent(BQ76920_t *BMS) {
-    uint8_t data[2]; // Array to hold high and low bytes of current data
-    BQ76920_ReadRegister(BMS, CC_LO, &data[0], NULL); // Read CC_LO (address 0x33)
-    BQ76920_ReadRegister(BMS, CC_HI, &data[1], NULL); // Read CC_HI (address 0x32)
-    // Combine high and low bytes into a signed 16-bit raw value
-    int16_t raw = (int16_t)((data[1] << 8) | data[0]);
-    // Ignore small noise values (±1 counts are treated as 0)
-    if (abs(raw) == 1) raw = 0;
-    // Convert raw value to current using 8.44 µV/LSB and sense resistor (datasheet Section 8.3.2)
-    float current = raw * 8.44f / RSENSE; // RSENSE is in ohms (defined in BQ76920.h)
+    uint8_t data[2] = {0};
 
-    // Check if current is valid (±200A, defined in BQ76920.h)
-    if (!IS_VALID_CURRENT(current)) {
-        current = 0.0f; // Set to 0 if out of range
+    // Read Coulomb Counter registers
+    BQ76920_ReadRegister(BMS, CC_LO, &data[0], NULL); // address 0x33
+    BQ76920_ReadRegister(BMS, CC_HI, &data[1], NULL); // address 0x32
+
+    // Combine into signed 16-bit value
+    int16_t raw = (int16_t)((data[1] << 8) | data[0]);
+
+    if (abs(raw) == 1) {
+        Log_Message(BMS_MSG_LEVEL_DEBUG, "Coulomb counter noise filtered: raw=±1");
+        raw = 0;
     }
 
-    return current; // Return the calculated current
+    float current = raw * 8.44f / RSENSE;
+
+    if (!IS_VALID_CURRENT(current)) {
+        Log_Message(BMS_MSG_LEVEL_WARNING, "Invalid current reading: %.2f A (raw=0x%04X)", current, raw);
+        current = 0.0f;
+    } else {
+        Log_Message(BMS_MSG_LEVEL_DEBUG, "Current: %.2f A (raw=0x%04X, CC_HI=0x%02X, CC_LO=0x%02X, RSENSE=%.2f)",
+            current, (uint16_t)raw, data[1], data[0], RSENSE);
+    }
+
+    return current;
 }
+
 
 // Function: BQ76920_GetTemperature
 // Inputs:
@@ -214,35 +256,41 @@ float getCurrent(BQ76920_t *BMS) {
 //   - Reads the temperature from either the chip’s internal sensor or an external thermistor,
 //     used to ensure the battery operates within safe temperature limits (datasheet Section 8.3.3, page 21).
 float BQ76920_GetTemperature(BQ76920_t *BMS, uint8_t temp_sel) {
-    uint8_t val; // Variable to hold SYS_CTRL1 register value
-    BQ76920_ReadRegister(BMS, SYS_CTRL1, &val, NULL); // Read SYS_CTRL1 (address 0x04)
-    // Set or clear TEMP_SEL bit to choose external (1) or internal (0) temperature
-    if (temp_sel) {
-        val |= (1 << 3); // Set bit 3 (TEMP_SEL=1) for external thermistor
-    } else {
-        val &= ~(1 << 3); // Clear bit 3 (TEMP_SEL=0) for internal die temperature
-    }
-    BQ76920_WriteRegister(BMS, SYS_CTRL1, &val, NULL); // Write updated SYS_CTRL1
+    uint8_t val;
+    BQ76920_ReadRegister(BMS, SYS_CTRL1, &val, NULL);
 
-    uint8_t data[2]; // Array to hold high and low bytes of temperature data
-    BQ76920_ReadRegister(BMS, TS1_HI, &data[0], NULL); // Read TS1_HI (address 0x2C)
-    BQ76920_ReadRegister(BMS, TS1_LO, &data[1], NULL); // Read TS1_LO (address 0x2D)
-    // Combine high and low bytes into a 14-bit raw ADC value
-    uint16_t raw = (((data[0] & 0x3f) << 8)) | data[1]; // Mask high byte to 6 bits
-    // Convert raw value to voltage using gain and offset
-    // Use int32_t to avoid truncation (per your request)
-    int32_t temp = (int32_t)BMS->GAIN * raw + (int32_t)BMS->OFFSET * 1000; // GAIN in µV/LSB, OFFSET in mV
-    float voltage = (float)temp / 1000000.0f; // Convert from microvolts to volts
-    // Convert voltage to temperature using chip’s formula (assumes 1.2V reference, 4.2mV/°C)
+    // Configure TEMP_SEL bit (bit 3)
+    if (temp_sel) {
+        val |= (1 << 3);  // External thermistor
+        Log_Message(BMS_MSG_LEVEL_DEBUG, "Selecting external temperature sensor (TEMP_SEL = 1)");
+    } else {
+        val &= ~(1 << 3); // Internal die temperature
+        Log_Message(BMS_MSG_LEVEL_DEBUG, "Selecting internal temperature sensor (TEMP_SEL = 0)");
+    }
+    BQ76920_WriteRegister(BMS, SYS_CTRL1, &val, NULL);
+
+    uint8_t data[2] = {0};
+    BQ76920_ReadRegister(BMS, TS1_HI, &data[0], NULL);
+    BQ76920_ReadRegister(BMS, TS1_LO, &data[1], NULL);
+
+    uint16_t raw = ((data[0] & 0x3F) << 8) | data[1];
+    int32_t temp = (int32_t)BMS->GAIN * raw + (int32_t)BMS->OFFSET * 1000;
+    float voltage = (float)temp / 1000000.0f;
     float temperature = 25.0f - ((voltage - 1.2f) / 0.0042f);
 
-    // Check if temperature is valid (-40°C to 85°C, defined in BQ76920.h)
     if (!IS_VALID_TEMPERATURE(temperature)) {
-        temperature = 0.0f; // Set to 0 if out of range
+        Log_Message(BMS_MSG_LEVEL_WARNING,
+            "Invalid temperature reading: %.2f °C (voltage=%.3f V, raw=0x%04X)", temperature, voltage, raw);
+        temperature = 0.0f;
+    } else {
+        Log_Message(BMS_MSG_LEVEL_DEBUG,
+            "Temperature: %.2f °C (raw=0x%04X, voltage=%.3f V, GAIN=%d, OFFSET=%d)",
+            temperature, raw, voltage, BMS->GAIN, BMS->OFFSET);
     }
 
-    return temperature; // Return temperature in Celsius
+    return temperature;
 }
+
 
 // Function: SOCPack
 // Inputs:
@@ -255,28 +303,42 @@ float BQ76920_GetTemperature(BQ76920_t *BMS, uint8_t temp_sel) {
 //   - Calculates the battery’s State of Charge by tracking energy and current usage,
 //     critical for knowing how much charge remains in the battery (used in BMS_Service.c).
 float SOCPack(BQ76920_t *BMS, float PackCurrent, float Vpack) {
-    // Calculate total energy capacity (mAh * seconds * cells * voltage * SOH)
+    // Calculate total energy and current capacity
     float fullEnergy = grossCapacity * 3600 * 4 * nominalPackV * (BMS->SOH / 100.0f);
-    // Calculate total current capacity (mAh * seconds * cells * SOH)
     float fullCurrent = grossCapacity * 3600 * 4 * (BMS->SOH / 100.0f);
-    // Apply efficiency factor for discharge (negative current)
-    if (PackCurrent < 0) PackCurrent *= ROUND_TRIP_EFFICIENCY; // Adjust for efficiency (0.9, defined in BQ76920.h)
 
-    // Update cumulative energy and current usage
-    BMS->wattUsage += PackCurrent * Vpack; // Add power (current * voltage) to total
-    BMS->currentUsage += PackCurrent; // Add current to total
+    // Log inputs
+    Log_Message(BMS_MSG_LEVEL_DEBUG,
+        "SOCPack input: Current=%.2f A, Voltage=%.2f V, SOH=%.1f%%", PackCurrent, Vpack, BMS->SOH);
 
-    // Calculate SOC based on energy and current
-    BMS->SOCEnergy = (fullEnergy + BMS->wattUsage) * 100.0f / fullEnergy; // Energy-based SOC
-    BMS->SOCCapacity = (fullCurrent + BMS->currentUsage) * 100.0f / fullCurrent; // Current-based SOC
+    // Apply efficiency factor for discharge
+    if (PackCurrent < 0) {
+        Log_Message(BMS_MSG_LEVEL_DEBUG, "Discharge current detected. Applying %.2f efficiency factor.", ROUND_TRIP_EFFICIENCY);
+        PackCurrent *= ROUND_TRIP_EFFICIENCY;
+    }
 
-    // Use Kalman filter to combine energy and capacity estimates for accuracy
-    KalmanFilter kf; // Declare a Kalman filter structure
-    kalman_filter_init(&kf, BMS->SOCEnergy, 1.0f, 0.05f); // Initialize with energy estimate
-    float fused = kalman_filter_update(&kf, BMS->SOCCapacity, 0.05f); // Update with capacity estimate
-    BMS->SOC = fused; // Store combined SOC value
-    return fused; // Return SOC as a percentage
+    // Update cumulative usage
+    BMS->wattUsage += PackCurrent * Vpack;
+    BMS->currentUsage += PackCurrent;
+
+    // Calculate SOC estimates
+    BMS->SOCEnergy = (fullEnergy + BMS->wattUsage) * 100.0f / fullEnergy;
+    BMS->SOCCapacity = (fullCurrent + BMS->currentUsage) * 100.0f / fullCurrent;
+
+    // Kalman filter fusion
+    KalmanFilter kf;
+    kalman_filter_init(&kf, BMS->SOCEnergy, 1.0f, 0.05f);
+    float fused = kalman_filter_update(&kf, BMS->SOCCapacity, 0.05f);
+
+    BMS->SOC = fused;
+
+    // Log estimates
+    Log_Message(BMS_MSG_LEVEL_DEBUG,
+        "SOC estimates: Energy=%.2f%%, Capacity=%.2f%%, Fused=%.2f%%", BMS->SOCEnergy, BMS->SOCCapacity, BMS->SOC);
+
+    return fused;
 }
+
 
 // Function: Enter_SHIP_Mode
 // Inputs:
@@ -290,10 +352,29 @@ void Enter_SHIP_Mode(BQ76920_t *BMS) {
     uint8_t step1 = (1 << 7); // SHUT_B = 1, SHUT_A = 0
     uint8_t step2 = (1 << 6); // SHUT_A = 1, SHUT_B = 0
 
-    BQ76920_WriteRegister(BMS, SYS_CTRL1, &step1, NULL);
-    HAL_Delay(1); // Mandatory 1ms delay between steps
-    BQ76920_WriteRegister(BMS, SYS_CTRL1, &step2, NULL);
+    Log_Message(BMS_MSG_LEVEL_INFO, "Entering SHIP mode...");
+
+    HAL_StatusTypeDef status1 = BQ76920_WriteRegister(BMS, SYS_CTRL1, &step1, NULL);
+    if (status1 != HAL_OK) {
+        Log_Message(BMS_MSG_LEVEL_ERROR, "Failed to write step 1 (SHUT_B=1) to SYS_CTRL1");
+    } else {
+        Log_Message(BMS_MSG_LEVEL_DEBUG, "Step 1 written: SYS_CTRL1 = 0x%02X", step1);
+    }
+
+    SoftwareDelay(1); // Mandatory 1ms delay between steps
+
+    HAL_StatusTypeDef status2 = BQ76920_WriteRegister(BMS, SYS_CTRL1, &step2, NULL);
+    if (status2 != HAL_OK) {
+        Log_Message(BMS_MSG_LEVEL_ERROR, "Failed to write step 2 (SHUT_A=1) to SYS_CTRL1");
+    } else {
+        Log_Message(BMS_MSG_LEVEL_DEBUG, "Step 2 written: SYS_CTRL1 = 0x%02X", step2);
+    }
+
+    if (status1 == HAL_OK && status2 == HAL_OK) {
+        Log_Message(BMS_MSG_LEVEL_INFO, "BQ76920 successfully entered SHIP mode.");
+    }
 }
+
 
 // Function: SOHPack
 // Inputs:
@@ -304,37 +385,48 @@ void Enter_SHIP_Mode(BQ76920_t *BMS) {
 //   - Estimates the battery’s health by comparing current usage to its original capacity,
 //     used to assess battery degradation over time (used in BMS_Service.c).
 float SOHPack(BQ76920_t *BMS) {
-    // Calculate total energy capacity (mAh * seconds * cells * voltage)
-    int32_t fullEnergy = grossCapacity * 3600 * 4 * nominalPackV; // grossCapacity and nominalPackV from BQ76920.h
-    // Calculate total current capacity (mAh * seconds * cells)
+    int32_t fullEnergy = grossCapacity * 3600 * 4 * nominalPackV;
     int32_t fullCurrent = grossCapacity * 3600 * 4;
-    // Use nominal open-circuit voltage for SOH calculation
-    float FullOCV = netOV; // netOV from BQ76920.h
-    // Initialize smallest cell voltage with the first cell
+    float FullOCV = netOV;
+
+    // Identify smallest cell voltage
     BMS->smallestV = BMS->Vcell[0];
-    // Find the smallest cell voltage
     for (int i = 1; i < 4; i++) {
-        if (BMS->Vcell[i] < BMS->smallestV) { // Check if current cell voltage is lower
-            BMS->smallestV = BMS->Vcell[i]; // Update smallest voltage
+        if (BMS->Vcell[i] < BMS->smallestV) {
+            BMS->smallestV = BMS->Vcell[i];
         }
     }
 
-    // Calculate SOH based on energy, capacity, and open-circuit voltage
-    BMS->SOHEnergy = BMS->wattUsage * 100.0f / fullEnergy; // Energy-based SOH
-    BMS->SOHCapacity = BMS->currentUsage * 100.0f / fullCurrent; // Capacity-based SOH
-    BMS->SOHOCV = BMS->smallestV * 100.0f / FullOCV; // Voltage-based SOH
+    Log_Message(BMS_MSG_LEVEL_DEBUG,
+        "SOHPack inputs: wattUsage=%.2f Ws, currentUsage=%.2f As, smallestV=%.3f V",
+        BMS->wattUsage, BMS->currentUsage, BMS->smallestV);
 
-    // Use Kalman filter to combine SOH estimates for accuracy
-    KalmanFilter kf; // Declare a Kalman filter structure
-    kalman_filter_init(&kf, BMS->SOHEnergy, 1.0f, 0.05f); // Initialize with energy estimate
-    float fused = kalman_filter_update(&kf, BMS->SOHCapacity, 0.05f); // Update with capacity estimate
-    fused = kalman_filter_update(&kf, BMS->SOHOCV, 0.05f); // Update with voltage estimate
+    // Compute SOH estimates
+    BMS->SOHEnergy = BMS->wattUsage * 100.0f / fullEnergy;
+    BMS->SOHCapacity = BMS->currentUsage * 100.0f / fullCurrent;
+    BMS->SOHOCV = BMS->smallestV * 100.0f / FullOCV;
 
-    BMS->SOH = fused; // Store combined SOH value
-    BMS->wattUsage = 0; // Reset energy usage counter
-    BMS->currentUsage = 0; // Reset current usage counter
-    return fused; // Return SOH as a percentage
+    Log_Message(BMS_MSG_LEVEL_DEBUG,
+        "SOH estimates: Energy=%.2f%%, Capacity=%.2f%%, OCV=%.2f%%",
+        BMS->SOHEnergy, BMS->SOHCapacity, BMS->SOHOCV);
+
+    // Kalman filtering
+    KalmanFilter kf;
+    kalman_filter_init(&kf, BMS->SOHEnergy, 1.0f, 0.05f);
+    float fused = kalman_filter_update(&kf, BMS->SOHCapacity, 0.05f);
+    fused = kalman_filter_update(&kf, BMS->SOHOCV, 0.05f);
+
+    BMS->SOH = fused;
+    BMS->wattUsage = 0;
+    BMS->currentUsage = 0;
+
+    Log_Message(BMS_MSG_LEVEL_DEBUG,
+        "Fused SOH = %.2f%% (FullEnergy=%ld Ws, FullCurrent=%ld As, OCV ref=%.2f V)",
+        BMS->SOH, fullEnergy, fullCurrent, FullOCV);
+
+    return fused;
 }
+
 
 // Function: readAlert
 // Inputs:
@@ -362,32 +454,47 @@ void readAlert(BQ76920_t *BMS) {
 // Significance:
 //   - Balances cell voltages by discharging the highest voltage cell during charging,
 //     ensuring all cells stay at similar voltages (datasheet Section 8.3.4, page 21).
-void EnableBalanceCell(BQ76920_t *BMS, float PackCurrent) {
-    uint8_t flags = 0x00; // Initialize balancing flags to 0 (no balancing)
-    // Only balance cells during charging (positive current)
+
+
+bool EnableBalanceCell(BQ76920_t *BMS, float PackCurrent) {
+    uint8_t flags = 0x00;
+
+    if (BMS == NULL || BMS->i2cHandle == NULL) {
+        return false;
+    }
+
     if (PackCurrent > 0.0f) {
-        // Find the cell with the highest voltage
-        float maxV = BMS->Vcell[0]; // Start with first cell voltage
-        int idx_max = 0; // Index of highest voltage cell
-        for (int i = 1; i < 4; i++) { // Check remaining cells
-            if (BMS->Vcell[i] > maxV) { // If higher voltage found
-                maxV = BMS->Vcell[i]; // Update maximum voltage
-                idx_max = i; // Update index
+        float maxV = BMS->Vcell[0];
+        int idx_max = 0;
+
+        for (int i = 1; i < 4; i++) {
+            if (BMS->Vcell[i] > maxV) {
+                maxV = BMS->Vcell[i];
+                idx_max = i;
             }
         }
-        // Find the cell with the lowest voltage
-        float minV = BMS->Vcell[0]; // Start with first cell voltage
-        for (int i = 1; i < 4; i++) { // Check remaining cells
-            if (BMS->Vcell[i] < minV) minV = BMS->Vcell[i]; // Update minimum voltage
+
+        float minV = BMS->Vcell[0];
+        for (int i = 1; i < 4; i++) {
+            if (BMS->Vcell[i] < minV) {
+                minV = BMS->Vcell[i];
+            }
         }
-        // Enable balancing if voltage difference exceeds threshold (0.05V, defined in BQ76920.h)
-        if (maxV - minV >= balanceThreshold) {
-            flags |= (1 << idx_max); // Set bit for highest voltage cell to enable balancing
+
+        if ((maxV - minV) >= balanceThreshold) {
+            flags |= (1 << idx_max);
+        } else {
+            return true; // No balancing needed, still success
         }
+    } else {
+        return true; // Not charging, no balancing
     }
-    // Write balancing flags to CELLBAL1 register (address 0x01, datasheet Section 8.5.2)
-    BQ76920_WriteRegister(BMS, CELLBAL1, &flags, NULL);
+
+    // Write the balancing flags to CELLBAL1 register
+    HAL_StatusTypeDef status = BQ76920_WriteRegister(BMS, CELLBAL1, &flags, NULL);
+    return (status == HAL_OK);
 }
+
 
 // Function: turnCHGOn
 // Inputs:
@@ -485,7 +592,10 @@ uint8_t getAlert(BQ76920_t *BMS, uint8_t k) {
 //     that could harm the battery (datasheet Section 8.3.1, page 20).
 uint8_t checkUV(float Vcell[4]) {
     for (int i = 0; i < 4; i++) { // Loop through all four cell voltages
-        if (Vcell[i] <= netUV) return 1; // Return 1 if any cell is below threshold (netUV from BQ76920.h)
+    	if (Vcell[i] <= netUV) {
+    		Log_Message(BMS_MSG_LEVEL_WARNING, "UV detected on Cell %d: %.3f V", i + 1, Vcell[i]);
+    		return 1;  // Undervoltage detected// Return 1 if any cell is below threshold (netUV from BQ76920.h)
+    	}
     }
     return 0; // Return 0 if no undervoltage detected
 }
@@ -540,6 +650,55 @@ uint8_t checkNotOV(float Vcell[4], uint8_t OV) {
     }
     return 1; // Return 1 if all cells are below threshold (overvoltage cleared)
 }
+
+
+// Function: checkOC
+// Input: PackCurrent (A) — should be negative for discharge
+// Return: 1 if overcurrent in discharge is detected
+uint8_t checkOC(float PackCurrent) {
+    if (-PackCurrent >= MaxDischargeCurrent) {
+        Log_Message(BMS_MSG_LEVEL_WARNING, "OCD triggered: %.2f A", PackCurrent);
+        return 1;
+    }
+    return 0;
+}
+
+// Function: checkNotOC
+// Input: PackCurrent (A), OC flag
+// Return: 1 if OCD condition has cleared
+uint8_t checkNotOC(float PackCurrent, uint8_t OC) {
+    if (!OC) return 0;
+    if (-PackCurrent < (MaxDischargeCurrent - thresholdRange)) {
+        Log_Message(BMS_MSG_LEVEL_INFO, "OCD cleared: %.2f A", PackCurrent);
+        return 1;
+    }
+    return 0;
+}
+
+// Function: checkSC
+// Input: PackCurrent (A)
+// Return: 1 if short-circuit in discharge is detected
+uint8_t checkSC(float PackCurrent) {
+    // You can define a SC threshold separately, but for now we reuse MaxDischargeCurrent
+    if (-PackCurrent >= MaxDischargeCurrent * 1.5f) { // SCD is typically more severe
+        Log_Message(BMS_MSG_LEVEL_ERROR, "SCD triggered: %.2f A", PackCurrent);
+        return 1;
+    }
+    return 0;
+}
+
+// Function: checkNotSC
+// Input: PackCurrent (A), SC flag
+// Return: 1 if SCD condition has cleared
+uint8_t checkNotSC(float PackCurrent, uint8_t SC) {
+    if (!SC) return 0;
+    if (-PackCurrent < (MaxDischargeCurrent * 1.5f - thresholdRange)) {
+        Log_Message(BMS_MSG_LEVEL_INFO, "SCD cleared: %.2f A", PackCurrent);
+        return 1;
+    }
+    return 0;
+}
+
 
 // Function: justWrite1
 // Inputs:
@@ -616,16 +775,16 @@ void BQ76920_GetMetrics(BQ76920_t *BMS, BMSMetrics_t *metrics) {
 // Significance:
 //   - Reads a single byte from a BQ76920 register over I2C, used for all register
 //     accesses (datasheet Section 8.5.23, page 33).
-void BQ76920_ReadRegister(BQ76920_t *BMS, uint8_t reg, uint8_t *data, uint8_t *crc) {
-    uint8_t buffer[2] = {reg, 0}; // Buffer with register address to send
-    // Send the register address to the chip (BQ76920_ADDRESS is 0x18 << 1)
-    HAL_I2C_Master_Transmit(BMS->i2cHandle, BQ76920_ADDRESS, buffer, 1, HAL_MAX_DELAY);
-    // Receive the register data
-    HAL_I2C_Master_Receive(BMS->i2cHandle, BQ76920_ADDRESS, data, 1, HAL_MAX_DELAY);
-    // Calculate CRC for the transmitted address if requested
-    if (crc) *crc = calculateCRC(buffer, 1);
-}
+HAL_StatusTypeDef BQ76920_ReadRegister(BQ76920_t *BMS, uint8_t reg, uint8_t *data, uint8_t *crc) {
+    HAL_StatusTypeDef status = HAL_I2C_Master_Transmit(BMS->i2cHandle, BQ76920_ADDRESS, &reg, 1, HAL_MAX_DELAY);
+    if (status != HAL_OK) return status;
 
+    status = HAL_I2C_Master_Receive(BMS->i2cHandle, BQ76920_ADDRESS, data, 1, HAL_MAX_DELAY);
+    if (status != HAL_OK) return status;
+
+    if (crc) *crc = calculateCRC(data, 1); // optional CRC
+    return HAL_OK;
+}
 // Function: BQ76920_WriteRegister
 // Inputs:
 //   - BMS: A pointer to a BQ76920_t structure, holding chip data
@@ -637,12 +796,47 @@ void BQ76920_ReadRegister(BQ76920_t *BMS, uint8_t reg, uint8_t *data, uint8_t *c
 // Significance:
 //   - Writes a single byte to a BQ76920 register over I2C, used for configuration
 //     and control (datasheet Section 8.5.23, page 33).
-void BQ76920_WriteRegister(BQ76920_t *BMS, uint8_t reg, uint8_t *data, uint8_t *crc) {
-    uint8_t buffer[2] = {reg, *data}; // Buffer with register address and data
-    // Calculate CRC for the address and data if requested
+HAL_StatusTypeDef BQ76920_WriteRegister(BQ76920_t *BMS, uint8_t reg, uint8_t *data, uint8_t *crc) {
+    uint8_t buffer[2] = {reg, *data};
     if (crc) *crc = calculateCRC(buffer, 2);
-    // Send the address and data to the chip
-    HAL_I2C_Master_Transmit(BMS->i2cHandle, BQ76920_ADDRESS, buffer, 2, HAL_MAX_DELAY);
+    return HAL_I2C_Master_Transmit(BMS->i2cHandle, BQ76920_ADDRESS, buffer, 2, HAL_MAX_DELAY);
+}
+
+
+void BQ76920_ReadGainAndOffset(BQ76920_t *BMS) {
+    if (BMS == NULL || BMS->i2cHandle == NULL) {
+        Log_Message(BMS_MSG_LEVEL_ERROR, "Invalid BMS handle in ReadGainAndOffset");
+        return;
+    }
+
+    uint8_t cc_gain1 = 0, cc_gain2 = 0, cc_offset = 0;
+
+    // Read registers as per datasheet (Table 11)
+    if (BQ76920_ReadRegister(BMS, CC_GAIN1, &cc_gain1, NULL) != HAL_OK) {
+        Log_Message(BMS_MSG_LEVEL_ERROR, "Failed to read CC_GAIN1");
+        return;
+    }
+
+    if (BQ76920_ReadRegister(BMS, CC_GAIN2, &cc_gain2, NULL) != HAL_OK) {
+        Log_Message(BMS_MSG_LEVEL_ERROR, "Failed to read CC_GAIN2");
+        return;
+    }
+
+    if (BQ76920_ReadRegister(BMS, CC_OFFSET, &cc_offset, NULL) != HAL_OK) {
+        Log_Message(BMS_MSG_LEVEL_ERROR, "Failed to read CC_OFFSET");
+        return;
+    }
+
+    // Combine CC_GAIN1 and CC_GAIN2 into full 16-bit gain value (CC_GAIN = (CC_GAIN1 << 8) | CC_GAIN2)
+    uint16_t raw_gain = ((uint16_t)cc_gain1 << 8) | cc_gain2;
+
+    // Calculate GAIN and OFFSET per datasheet (Section 8.3.2.4)
+    BMS->GAIN   = 365.0f + (float)(raw_gain);  // GAIN in µV/LSB
+    BMS->OFFSET = (float)((int8_t)cc_offset);  // OFFSET in mV (2's complement signed)
+
+    Log_Message(BMS_MSG_LEVEL_DEBUG,
+        "Read Gain and Offset: CC_GAIN1=0x%02X, CC_GAIN2=0x%02X, raw_gain=%u → GAIN=%.1f uV/LSB, OFFSET=%.1f mV",
+        cc_gain1, cc_gain2, raw_gain, BMS->GAIN, BMS->OFFSET);
 }
 
 // Function: BQ76920_GetExternalThermistorTemperature
@@ -657,33 +851,58 @@ void BQ76920_WriteRegister(BQ76920_t *BMS, uint8_t reg, uint8_t *data, uint8_t *
 //   - Reads the temperature from an external thermistor connected to the BQ76920,
 //     critical for monitoring battery temperature (datasheet Section 8.3.3, page 21).
 float BQ76920_GetExternalThermistorTemperature(BQ76920_t *BMS, float beta, float R_nominal, float T_nominal) {
-    uint8_t prev_val; // Store original SYS_CTRL1 value to restore later
-    BQ76920_ReadRegister(BMS, SYS_CTRL1, &prev_val, NULL); // Read SYS_CTRL1 (address 0x04)
-    uint8_t val = prev_val | (1 << 3); // Set TEMP_SEL=1 for external thermistor
-    BQ76920_WriteRegister(BMS, SYS_CTRL1, &val, NULL); // Write to enable thermistor
-
-    uint8_t data[2]; // Array to hold high and low bytes of thermistor data
-    BQ76920_ReadRegister(BMS, TS1_HI, &data[0], NULL); // Read TS1_HI (address 0x2C)
-    BQ76920_ReadRegister(BMS, TS1_LO, &data[1], NULL); // Read TS1_LO (address 0x2D)
-    // Combine high and low bytes into a 14-bit raw ADC value
-    uint16_t raw = (((data[0] & 0x3F) << 8) | data[1]); // Mask high byte to 6 bits
-    // Convert raw value to voltage using gain and offset
-    // Use int32_t to avoid truncation (per your request)
-    int32_t temp = (int32_t)BMS->GAIN * raw + (int32_t)BMS->OFFSET * 1000; // GAIN in µV/LSB, OFFSET in mV
-    float v_ts1 = (float)temp / 1000000.0f; // Convert from microvolts to volts
-
-    const float R_fixed = 10000.0f; // Fixed 10kΩ pull-up resistor (datasheet Section 8.3.3)
-    // Calculate thermistor resistance using voltage divider formula (assumes 3V supply)
-    float R_therm = R_fixed * v_ts1 / (3.0f - v_ts1);
-    // Convert resistance to temperature using the Beta equation
-    float T_kelvin = 1.0f / ((1.0f / (T_nominal + 273.15f)) + (1.0f / beta) * logf(R_therm / R_nominal));
-    float temperature = T_kelvin - 273.15f; // Convert from Kelvin to Celsius
-
-    // Check if temperature is valid (-40°C to 85°C)
-    if (!IS_VALID_TEMPERATURE(temperature)) {
-        temperature = 0.0f; // Set to 0 if out of range
+    if (BMS == NULL || BMS->i2cHandle == NULL) {
+        Log_Message(BMS_MSG_LEVEL_ERROR, "Invalid BMS handle");
+        return 0.0f;
     }
 
-    BQ76920_WriteRegister(BMS, SYS_CTRL1, &prev_val, NULL); // Restore original SYS_CTRL1
-    return temperature; // Return temperature in Celsius
+    // Ensure gain/offset are initialized
+    if (BMS->GAIN == 0 || BMS->OFFSET == 0) {
+        BQ76920_ReadGainAndOffset(BMS);
+    }
+
+    // Backup and modify SYS_CTRL1 to enable TEMP_SEL for external thermistor
+    uint8_t prev_val = 0;
+    BQ76920_ReadRegister(BMS, SYS_CTRL1, &prev_val, NULL);
+    uint8_t val = prev_val | (1 << 3);  // Set TEMP_SEL = 1
+    BQ76920_WriteRegister(BMS, SYS_CTRL1, &val, NULL);
+    SoftwareDelay(1);  // Allow settling
+
+    // Read TS1_HI and TS1_LO (14-bit ADC value)
+    uint8_t data[2] = {0};
+    BQ76920_ReadRegister(BMS, TS1_HI, &data[0], NULL);  // Address 0x2C
+    BQ76920_ReadRegister(BMS, TS1_LO, &data[1], NULL);  // Address 0x2D
+    uint16_t raw = (((data[0] & 0x3F) << 8) | data[1]);  // Mask upper 2 bits of HI
+
+    // Calculate voltage from ADC raw value
+    int32_t temp_uV = (int32_t)BMS->GAIN * raw + (int32_t)(BMS->OFFSET * 1000);  // µV
+    float v_ts1 = temp_uV / 1000000.0f;  // Convert to volts
+
+    // Clamp voltage to avoid divide-by-zero
+    if (v_ts1 >= 3.0f) v_ts1 = 2.999f;
+    if (v_ts1 <= 0.0f) v_ts1 = 0.001f;
+
+    const float R_fixed = 10000.0f;  // 10k pull-up
+    float R_therm = R_fixed * v_ts1 / (3.0f - v_ts1);  // Voltage divider formula
+
+    // Calculate temperature from Beta model
+    float T_kelvin = 1.0f / ((1.0f / (T_nominal + 273.15f)) + (1.0f / beta) * logf(R_therm / R_nominal));
+    float temperature = T_kelvin - 273.15f;
+
+    // Range check
+    if (!IS_VALID_TEMPERATURE(temperature)) {
+        Log_Message(BMS_MSG_LEVEL_WARNING, "Temperature out of range: %.2f °C", temperature);
+        temperature = 0.0f;
+    }
+
+    // Restore original TEMP_SEL setting
+    BQ76920_WriteRegister(BMS, SYS_CTRL1, &prev_val, NULL);
+
+    // Debug output
+    Log_Message(BMS_MSG_LEVEL_DEBUG,
+                "TS1 raw=%u, V=%.3f V, R=%.1f Ω, T=%.2f °C",
+                raw, v_ts1, R_therm, temperature);
+
+    return temperature;
 }
+

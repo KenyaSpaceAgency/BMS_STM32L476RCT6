@@ -1,7 +1,9 @@
-../Core/Src/app/flash.c:30:10:CalculateCRC16	4
-../Core/Src/app/flash.c:57:19:Flash_WriteDoubleWord	4
-../Core/Src/app/flash.c:86:10:Flash_ReadDoubleWord	3
-../Core/Src/app/flash.c:106:19:Flash_ErasePage	2
-../Core/Src/app/flash.c:145:6:Flash_WriteTelemetry	5
-../Core/Src/app/flash.c:185:6:Flash_ReadTelemetry	3
-../Core/Src/app/flash.c:214:6:Flash_RecoverWritePointer	4
+../Core/Src/app/flash.c:12:10:CalculateCRC16	4
+../Core/Src/app/flash.c:23:19:Flash_WriteDoubleWord	5
+../Core/Src/app/flash.c:40:10:Flash_ReadDoubleWord	4
+../Core/Src/app/flash.c:48:17:Flash_GetPage	1
+../Core/Src/app/flash.c:52:19:Flash_ErasePage	4
+../Core/Src/app/flash.c:78:6:Flash_WriteBytes	6
+../Core/Src/app/flash.c:106:6:Flash_WriteTelemetry	5
+../Core/Src/app/flash.c:135:6:Flash_ReadTelemetry	3
+../Core/Src/app/flash.c:153:6:Flash_RecoverWritePointer	4

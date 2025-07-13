@@ -39,7 +39,7 @@ Core/Src/app/flash.o: ../Core/Src/app/flash.c ../Core/Inc/flash.h \
  ../Core/Inc/Temperature.h ../Core/Inc/log.h ../Core/Inc/bms_service.h \
  ../Core/Inc/bq76920.h ../Core/Inc/flash.h \
  ../Drivers/STM32L4xx_HAL_Driver/Inc/stm32l4xx_hal_flash_ex.h \
- ../Core/Inc/main.h ../Core/Inc/log.h
+ ../Core/Inc/log.h ../Core/Inc/main.h
 ../Core/Inc/flash.h:
 ../Core/Inc/main.h:
 ../Drivers/STM32L4xx_HAL_Driver/Inc/stm32l4xx_hal.h:
@@ -86,5 +86,5 @@ Core/Src/app/flash.o: ../Core/Src/app/flash.c ../Core/Inc/flash.h \
 ../Core/Inc/bq76920.h:
 ../Core/Inc/flash.h:
 ../Drivers/STM32L4xx_HAL_Driver/Inc/stm32l4xx_hal_flash_ex.h:
-../Core/Inc/main.h:
 ../Core/Inc/log.h:
+../Core/Inc/main.h:

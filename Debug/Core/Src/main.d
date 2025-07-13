@@ -38,7 +38,18 @@ Core/Src/main.o: ../Core/Src/main.c ../Core/Inc/main.h \
  ../Core/Inc/BQ76920.h ../Core/Inc/kalman_filter.h \
  ../Core/Inc/Temperature.h ../Core/Inc/main.h ../Core/Inc/log.h \
  ../Core/Inc/bms_service.h ../Core/Inc/bq76920.h ../Core/Inc/flash.h \
- ../Core/Inc/flash.h ../Core/Inc/BMS_Service.h
+ ../Core/Src/FreeRTOS/Source/CMSIS_RTOS_V2/cmsis_os.h \
+ ../Core/Src/FreeRTOS/Source/include/FreeRTOS.h \
+ ../Core/Inc/FreeRTOSConfig.h \
+ ../Core/Src/FreeRTOS/Source/include/projdefs.h \
+ ../Core/Src/FreeRTOS/Source/include/portable.h \
+ ../Core/Src/FreeRTOS/Source/include/deprecated_definitions.h \
+ ../Core/Src/FreeRTOS/Source/portable/GCC/ARM_CM4F/portmacro.h \
+ ../Core/Src/FreeRTOS/Source/include/mpu_wrappers.h \
+ ../Core/Src/FreeRTOS/Source/include/task.h \
+ ../Core/Src/FreeRTOS/Source/include/list.h \
+ ../Core/Src/FreeRTOS/Source/CMSIS_RTOS_V2/cmsis_os2.h \
+ ../Core/Inc/flash.h ../Core/Inc/BMS_Service.h ../Core/Inc/Temperature.h
 ../Core/Inc/main.h:
 ../Drivers/STM32L4xx_HAL_Driver/Inc/stm32l4xx_hal.h:
 ../Core/Inc/stm32l4xx_hal_conf.h:
@@ -84,5 +95,17 @@ Core/Src/main.o: ../Core/Src/main.c ../Core/Inc/main.h \
 ../Core/Inc/bms_service.h:
 ../Core/Inc/bq76920.h:
 ../Core/Inc/flash.h:
+../Core/Src/FreeRTOS/Source/CMSIS_RTOS_V2/cmsis_os.h:
+../Core/Src/FreeRTOS/Source/include/FreeRTOS.h:
+../Core/Inc/FreeRTOSConfig.h:
+../Core/Src/FreeRTOS/Source/include/projdefs.h:
+../Core/Src/FreeRTOS/Source/include/portable.h:
+../Core/Src/FreeRTOS/Source/include/deprecated_definitions.h:
+../Core/Src/FreeRTOS/Source/portable/GCC/ARM_CM4F/portmacro.h:
+../Core/Src/FreeRTOS/Source/include/mpu_wrappers.h:
+../Core/Src/FreeRTOS/Source/include/task.h:
+../Core/Src/FreeRTOS/Source/include/list.h:
+../Core/Src/FreeRTOS/Source/CMSIS_RTOS_V2/cmsis_os2.h:
 ../Core/Inc/flash.h:
 ../Core/Inc/BMS_Service.h:
+../Core/Inc/Temperature.h:

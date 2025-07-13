@@ -1,8 +1,8 @@
-/*
- * flash.h
- *
- *  Created on: Jul 2, 2025
- *      Author: yomue
+/**
+ * @file flash.h
+ * @brief Flash memory interface for telemetry logging and generic read/write
+ * @author yomue
+ * @date Jul 2, 2025
  */
 
 #ifndef __FLASH_H
@@ -15,44 +15,39 @@ extern "C" {
 #include "main.h"
 #include "stm32l4xx_hal.h"
 
-// --- Flash memory configuration ---
-#define FLASH_USER_START_ADDR  ((uint32_t)0x0803F800)  // Last 2KB of 256KB flash
+
+// --- Flash Region Constants ---
+#define STM32_FLASH_END        ((uint32_t)(FLASH_BASE + 512 * 1024)) // End of 512KB flash
+#define FLASH_USER_START_ADDR  ((uint32_t)0x0803F800)          // Last 2KB of flash
 #define FLASH_USER_END_ADDR    ((uint32_t)0x0803FFFF)
-#define FLASH_PAGE_SIZE        ((uint32_t)0x800)       // 2KB per page
+#define FLASH_PAGE_SIZE        ((uint32_t)0x800)               // 2KB per page
+
+// --- Snapshot Layout ---
 #define SNAPSHOT_SIZE          sizeof(TelemetrySnapshot)
 #define MAX_SNAPSHOTS          (FLASH_PAGE_SIZE / SNAPSHOT_SIZE)
-
-// --- Telemetry versioning ---
 #define TELEMETRY_VERSION      0x01
 
-// --- Flash API ---
+// --- API: Low-level Flash Access ---
 HAL_StatusTypeDef Flash_WriteDoubleWord(uint32_t address, uint64_t data);
-uint64_t Flash_ReadDoubleWord(uint32_t address);
-HAL_StatusTypeDef Flash_ErasePage(void);
-void Flash_WriteTelemetry(void);
-void Flash_ReadTelemetry(void);
-void Flash_RecoverWritePointer(void);
+uint64_t          Flash_ReadDoubleWord(uint32_t address);
+HAL_StatusTypeDef Flash_ErasePage(uint32_t address);  ///< Erase page containing address
+bool              Flash_WriteBytes(uint32_t address, uint8_t *data, uint16_t len);
 
-// --- CRC16 utility (used internally but may be reused externally) ---
+// --- API: Snapshot Access ---
+void Flash_WriteTelemetry(void);      ///< Writes current telemetry to flash
+void Flash_ReadTelemetry(void);       ///< Reads snapshot from flash into global telemetry
+void Flash_RecoverWritePointer(void); ///< Scans for last used flash slot after reboot
+
+// --- Utility: CRC ---
 uint16_t CalculateCRC16(const uint8_t *data, uint32_t length);
 
-
-// Structure: TelemetrySnapshot
-// Purpose:
-//   - A container to store telemetry data in flash with version and CRC for integrity.
-//   - Ensures data is aligned to 64-bit boundaries (required for STM32 flash writes).
-// Fields:
-//   - version: A uint8_t, tracks the telemetry format version (0x01)
-//   - reserved: A 3-byte array, padding for future use or alignment
-//   - telemetry: The TelemetryData structure with all battery data
-//   - crc: A uint16_t, the CRC-16 checksum for data integrity
-//   - padding: A uint16_t, ensures 64-bit alignment for flash writes
+// --- Data Structure: Telemetry Snapshot Format ---
 typedef struct {
-    uint8_t version;              // Version number to identify telemetry format
-    uint8_t reserved[3];          // Reserved bytes for future use or alignment
-    TelemetryData telemetry;      // The actual telemetry data (voltages, currents, etc.)
-    uint16_t crc;                 // CRC-16 checksum to verify data integrity
-    uint16_t padding;             // Padding to align to 8 bytes (64 bits)
+    uint8_t       version;              ///< Format version
+    uint8_t       reserved[3];          ///< Alignment padding
+    TelemetryData telemetry;            ///< Actual data
+    uint16_t      crc;                  ///< CRC-16 checksum
+    uint16_t      padding;              ///< Align to 64-bit boundary
 } TelemetrySnapshot;
 
 #ifdef __cplusplus
